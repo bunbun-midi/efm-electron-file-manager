@@ -1,0 +1,38 @@
+const {app,BrowserWindow,ipcMain,shell,dialog}=require('electron'),fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.join(__dirname,'.electron-test-data','activity');require('node:fs').mkdirSync(root,{recursive:true});app.setPath('userData',path.join(root,'profile'));
+const handlers=new Map(),handle=ipcMain.handle.bind(ipcMain);ipcMain.handle=(name,fn)=>{handlers.set(name,fn);handle(name,fn);};shell.openPath=async()=>'';
+require('../main');const call=(name,...args)=>handlers.get(name)({},...args);
+let imported;
+app.whenReady().then(async()=>{try{
+ const work=await fs.mkdtemp(path.join(root,'work-')),file=path.join(work,'photo.png'),target=path.join(work,'destination');await fs.mkdir(target);
+ await fs.writeFile(file,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64'));
+ await call('appSettings:set',{historyExtensions:'.PNG, txt'});await call('file:open',file);const renamed=await call('file:rename',file,'renamed.png');const moved=await call('file:move',renamed,target);
+ const history=await call('dir:list','vdir://history');assert.ok(history.entries.some(e=>e.action==='renamed'&&e.historyPath===file&&e.path2===renamed));assert.ok(history.entries.some(e=>e.action==='moved'&&e.path2===moved.path));
+ assert.equal(await call('dir:up',path.parse(work).root),'vdir://drives');const drives=await call('dir:list','vdir://drives');assert.ok(drives.entries.some(e=>e.path===path.parse(work).root));
+ const html=path.join(work,`test-background-${Date.now()}.html`);await fs.writeFile(html,'<!doctype html><html><body><button id="test" onclick="this.textContent=\'Clicked\'">Test</button><script>document.body.dataset.ran="yes"</script></body></html>');
+ dialog.showOpenDialog=async()=>({canceled:false,filePaths:[html]});imported=await call('backgrounds:import');assert.equal(await fs.readFile(imported,'utf8'),await fs.readFile(html,'utf8'));
+ const w=BrowserWindow.getAllWindows()[0];if(w.webContents.isLoading())await new Promise(r=>w.webContents.once('did-finish-load',r));
+ w.setContentSize(900,650);
+ await w.webContents.executeJavaScript(`new Promise(r=>{const timer=setInterval(()=>{if(HtmlBackground.frame&&DesktopShortcuts.manager){clearInterval(timer);r();}},20)})`);
+ console.log(await w.webContents.executeJavaScript(`(async()=>{
+  const checks=[],check=(ok,name)=>{if(!ok)throw Error(name);checks.push(name);},manager=WindowSystemMenu.manager;
+  await HtmlBackground.load(${JSON.stringify(imported)});await new Promise(r=>setTimeout(r,300));
+  check(HtmlBackground.frame.inert&&HtmlBackground.mode===0,'Background starts without accepting input');
+  localStorage.removeItem('efm-background-moved');HtmlBackground.position();const corner=HtmlBackground.control.getBoundingClientRect();check(corner.left===8&&corner.bottom<=innerHeight,'Background control stays in the lower-left viewport');
+  localStorage.setItem('efm-background-moved','true');HtmlBackground.control.style.left='5000px';HtmlBackground.control.style.top='5000px';HtmlBackground.position();const clamped=HtmlBackground.control.getBoundingClientRect();check(clamped.right<=innerWidth&&clamped.bottom<=innerHeight,'Moved background control is clamped on screen');localStorage.removeItem('efm-background-moved');HtmlBackground.position();
+  check(HtmlBackground.frame.sandbox.contains('allow-scripts')&&!HtmlBackground.frame.sandbox.contains('allow-same-origin'),'Background keeps scripts isolated from EFM origin');
+  HtmlBackground.setMode(1);check(!HtmlBackground.frame.inert&&getComputedStyle(document.getElementById('desktop')).pointerEvents==='none','Interactive desktop mode passes empty desktop input through');
+  HtmlBackground.setMode(2);check(getComputedStyle(document.getElementById('floating-toolbar')).visibility==='hidden'&&getComputedStyle(HtmlBackground.control).visibility==='visible','Fullscreen background hides toolbar and retains mode control');
+  HtmlBackground.setMode(0);check(HtmlBackground.frame.inert,'Returning to view-only disables background input');
+  const win=manager.open(${JSON.stringify(target)});await win.navigate(win.path);const entry=win.entries.find(e=>e.path===${JSON.stringify(moved.path)});
+  const viewer=await ImageViewer.open(win,entry);check(!win.preview&&viewer.preview===entry&&viewer.el!==win.el,'Image viewer opens separately and preserves source folder');
+  await new Promise(r=>setTimeout(r,300));check(viewer.el.querySelector('img').naturalWidth===1,'Separate image viewer loads image');
+  manager.close(viewer.id);check(win.el.isConnected,'Closing viewer retains folder window');
+  const history=manager.open('vdir://history');await history.navigate(history.path);check(history.viewMode==='detail'&&history.el.querySelectorAll('th').length===4,'History displays Action Path Path2 and Time columns');
+  return checks;
+ })()`));
+ const frame=w.webContents.mainFrame.frames.find(f=>f.url.includes(path.basename(imported)));assert.ok(frame);assert.deepEqual(await frame.executeJavaScript('[document.body.dataset.ran,typeof window.fm,typeof require]'),['yes','undefined','undefined']);
+ await w.webContents.executeJavaScript('HtmlBackground.load("off")');await fs.unlink(imported);imported=null;
+ console.log('History actions, root drives, HTML import and sandboxed script execution passed.');app.exit(0);
+ }catch(error){console.error(error);if(imported)await fs.unlink(imported).catch(()=>{});app.exit(1);}});
+setTimeout(()=>{console.error('Activity/background checks timed out');app.exit(1);},30000).unref();

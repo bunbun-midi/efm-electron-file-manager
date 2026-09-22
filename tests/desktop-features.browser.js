@@ -1,0 +1,65 @@
+(async () => {
+  const results = [], check = (ok, message) => { if (!ok) throw new Error(message); results.push(message); };
+  AppSettings.close();
+  const manager = new WindowManager(); DesktopShortcuts.manager = manager;
+  const prior = window.fm.setShortcutAppearance;
+  window.fm.setShortcutAppearance = async (_id, value) => value;
+  DesktopShortcuts.appearances ||= {};
+  const s = { id: 'appearance-test', name: 'A long desktop shortcut label', targetPath: '/app.exe', kind: 'file', x: 150, y: 150, color: '#aaa' };
+  const icon = DesktopShortcuts.renderOne(s);
+  for (const anchor of ['nw','n','ne','w','c','e','sw','s','se']) {
+    const pos = DesktopIconAppearance.position(anchor, false, 100, 80, 40, 20);
+    check(pos.left >= 0 && pos.top >= 0 && pos.left + 40 <= 100 && pos.top + 20 <= 80, `Inside anchor ${anchor} fits the icon bounds`);
+    if (anchor !== 'c') {
+      const out = DesktopIconAppearance.position(anchor, true, 100, 80, 40, 20);
+      check(out.left + 40 <= 0 || out.left >= 100 || out.top + 20 <= 0 || out.top >= 80, `Outside anchor ${anchor} clears the icon bounds`);
+    }
+  }
+  const editor = DesktopIconAppearance.open(s);
+  check(editor.type === 'utility' && !document.querySelector('.modal-overlay:not(.hidden)'), 'Desktop Appearance opens in a nonmodal internal window');
+  check(editor.content.querySelectorAll('[data-anchor]').length === 9, 'Appearance has a 3 × 3 anchor grid');
+  editor.content.querySelector('.label-stick').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',shiftKey:true,bubbles:true}));
+  check(editor.content.querySelector('[data-field="offsetX"]').value === '0.1', 'Joystick Shift+arrow nudges labels by one tenth pixel');
+  editor.content.querySelector('[data-anchor="c"]').click();
+  check(editor.content.querySelector('[data-field="outside"]').disabled, 'Centered label is always centered over the icon');
+  const color = editor.content.querySelector('[data-field="textColor"]'); color.value = '#123456'; color.dispatchEvent(new Event('input', { bubbles: true }));
+  const artwork = document.createElement('canvas'); artwork.width = 64; artwork.height = 32;
+  artwork.getContext('2d').fillRect(0, 0, 64, 32);
+  window.fm.pickShortcutImage = async () => artwork.toDataURL();
+  await editor.content.querySelector('.choose-icon').onclick();
+  editor.content.querySelector('.appearance-save').click(); await new Promise(resolve => setTimeout(resolve, 30));
+  const updated = document.querySelector('[data-shortcut-id="appearance-test"]');
+  check(s.appearance.textColor === '#123456' && getComputedStyle(updated.querySelector('.icon-label-text')).color === 'rgb(18, 52, 86)', 'Individual text appearance saves and applies without changing other icons');
+  check(s.appearance.offsetX === 0.1, 'Label offsets persist with per-icon appearance');
+  await new Promise(resolve => setTimeout(resolve, 150));
+  check(updated.querySelector('.icon-thumbnail').naturalWidth === 64, 'A chosen custom image replaces the desktop icon');
+  const labelBounds = updated.querySelector('.icon-label').getBoundingClientRect(), iconBounds = updated.querySelector('.icon-square').getBoundingClientRect();
+  check(Math.abs((labelBounds.left + labelBounds.right) / 2 - (iconBounds.left + iconBounds.right) / 2) < 2 && Math.abs((labelBounds.top + labelBounds.bottom) / 2 - (iconBounds.top + iconBounds.bottom) / 2) < 2, 'Centered label follows the actual nonsquare custom image bounds');
+  const fontBefore=parseFloat(getComputedStyle(updated.querySelector('.icon-label-text')).fontSize), sizeBefore=iconBounds.width;
+  updated.dispatchEvent(new WheelEvent('wheel',{ctrlKey:true,deltaY:-120,bubbles:true,cancelable:true}));
+  await new Promise(resolve=>setTimeout(resolve,250));
+  const fontAfter=parseFloat(getComputedStyle(updated.querySelector('.icon-label-text')).fontSize), sizeAfter=updated.querySelector('.icon-square').getBoundingClientRect().width;
+  check(fontAfter>fontBefore && Math.abs(fontAfter/fontBefore-sizeAfter/sizeBefore)<0.05,'Per-icon font size grows in proportion to icon zoom');
+  let launch;
+  window.fm.launchShortcut = async (target, paths) => { launch = { target, paths }; };
+  const event = new Event('drop', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'dataTransfer', { value: { getData: () => JSON.stringify({ paths: ['/files/a.txt', '/files/b.txt'] }) } });
+  updated.dispatchEvent(event); await Promise.resolve();
+  check(launch?.target === '/app.exe' && launch.paths.length === 2 && event.defaultPrevented, 'Dropping files on an executable shortcut passes the entire group to launch');
+  const help = ShortcutsHelp.open(manager);
+  check(help.content.textContent.includes('Alt+E / Command+E') && getComputedStyle(help.content).fontSize === '11px', 'Shortcuts help shows the new Home shortcuts in small font');
+  check(ShortcutsHelp.open(manager) === help && !document.querySelector('.modal-overlay:not(.hidden)'), 'Shortcut reference is reusable and nonmodal');
+  manager.close(help.id);
+  AppSettings.open();
+  const before = AppSettings.current.iconSize;
+  window.fm.importSettings = async () => ({ iconSize: 64, windowAppearance: { frame: '#112233' } });
+  await AppSettings.el.querySelector('.settings-import-btn').onclick();
+  check(AppSettings.el.querySelector('.app-icon-size').value === '64' && AppSettings.current.iconSize === before, 'JSON import loads a reviewable draft before Save');
+  let exported;
+  window.fm.exportSettings = async settings => { exported = settings; return true; };
+  await AppSettings.el.querySelector('.settings-export-btn').onclick();
+  check(exported.iconSize === 64 && exported.windowAppearance.frame === '#112233', 'JSON export includes the current general and window appearance settings');
+  AppSettings.close();
+  updated._disposeLabel?.(); updated.remove(); window.fm.setShortcutAppearance = prior;
+  return results;
+})();

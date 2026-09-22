@@ -1,0 +1,106 @@
+/* Folder/window chrome. Values and bounds are defined in windowAppearance.js. */
+.fm-window {
+  background: var(--wm-frame); color: var(--wm-text);
+  border: var(--wm-border-width) solid var(--wm-border); border-radius: var(--wm-radius);
+  min-width: var(--wm-min-width); min-height: var(--wm-min-height);
+  box-shadow: inset calc(-1 * var(--wm-bevel-width)) calc(-1 * var(--wm-bevel-width)) 0 var(--wm-bevel-dark),
+    inset var(--wm-bevel-width) var(--wm-bevel-width) 0 var(--wm-bevel-light),
+    inset calc(-2 * var(--wm-bevel-width)) calc(-2 * var(--wm-bevel-width)) 0 var(--wm-bevel-inner-dark),
+    inset calc(2 * var(--wm-bevel-width)) calc(2 * var(--wm-bevel-width)) 0 var(--wm-bevel-inner-light),
+    var(--wm-shadow-x) var(--wm-shadow-y) var(--wm-shadow-blur) var(--wm-shadow-spread) var(--wm-shadow-rgba);
+}
+.fm-titlebar {
+  height: max(var(--wm-title-height), calc(var(--wm-title-button-height) + 4px));
+  padding: 0 var(--wm-title-right) 0 var(--wm-title-left);
+  font-size: var(--wm-title-font); letter-spacing: var(--wm-title-spacing);
+  background: linear-gradient(90deg, var(--wm-title-inactive-start), var(--wm-title-inactive-end)); color: var(--wm-title-inactive-text);
+  border-radius: var(--wm-radius) var(--wm-radius) 0 0;
+}
+.fm-window.active .fm-titlebar { background: linear-gradient(90deg, var(--wm-title-active-start), var(--wm-title-active-end)); color: var(--wm-title-active-text); box-shadow: inset 0 0 0 1px var(--wm-title-highlight-rgba); }
+.fm-system-button { padding-right: var(--wm-system-button-gap); margin-right: var(--wm-system-button-gap); }
+.fm-title-buttons { gap: var(--wm-title-button-gap); }
+.fm-title-buttons button, .fm-go-btn, .fm-search-btn, .fm-window .search-actions button {
+  background: var(--wm-button); color: var(--wm-button-text); border: var(--wm-button-border-width) solid var(--wm-button-border); border-radius: var(--wm-button-radius);
+  box-shadow: inset calc(-1 * var(--wm-button-bevel)) calc(-1 * var(--wm-button-bevel)) 0 var(--wm-button-dark), inset var(--wm-button-bevel) var(--wm-button-bevel) 0 var(--wm-button-light);
+}
+.fm-title-buttons button:active, .fm-go-btn:active, .fm-search-btn:active, .fm-window .search-actions button:active {
+  box-shadow: inset var(--wm-button-bevel) var(--wm-button-bevel) 0 var(--wm-button-dark), inset calc(-1 * var(--wm-button-bevel)) calc(-1 * var(--wm-button-bevel)) 0 var(--wm-button-light);
+}
+.fm-title-buttons button { width: var(--wm-title-button-width); height: var(--wm-title-button-height); font-size: var(--wm-title-button-font); }
+.fm-locationbar { background: var(--wm-address); padding: var(--wm-address-padding); gap: var(--wm-address-gap); border-bottom: var(--wm-address-border-width) solid var(--wm-address-border); }
+.fm-location-input, .fm-window .metadata-input, .fm-window .rename-input, .fm-window .search-query {
+  background: var(--wm-input); color: var(--wm-input-text); border: var(--wm-input-border-width) solid var(--wm-input-border);
+  padding: var(--wm-input-y) var(--wm-input-x);
+  box-shadow: inset var(--wm-button-bevel) var(--wm-button-bevel) 0 var(--wm-button-dark), inset calc(-1 * var(--wm-button-bevel)) calc(-1 * var(--wm-button-bevel)) 0 var(--wm-button-light);
+}
+.fm-location-input { font-size: var(--wm-input-font); }
+.fm-window input:focus { outline: var(--wm-focus-width) solid var(--wm-focus); outline-offset: 0; }
+.fm-go-btn, .fm-search-btn { padding: var(--wm-button-y) var(--wm-button-x); font-size: var(--wm-button-font); }
+.fm-content { background: var(--wm-content); color: var(--wm-content-text); border: var(--wm-content-border-width) solid var(--wm-content-border); margin: 0 var(--wm-content-margin); }
+.fm-content.drop-target { background: var(--wm-drop-background); outline: var(--wm-drop-width) dashed var(--wm-drop-border); outline-offset: calc(-1 * var(--wm-drop-width)); }
+.fm-statusbar { background: var(--wm-status); color: var(--wm-status-text); padding: var(--wm-status-y) var(--wm-status-x); font-size: var(--wm-status-font); border-top: var(--wm-status-border-width) solid var(--wm-status-border); }
+.fm-content::-webkit-scrollbar { width: var(--wm-scrollbar-width); height: var(--wm-scrollbar-width); }
+.fm-content::-webkit-scrollbar-track, .fm-content::-webkit-scrollbar-corner { background: var(--wm-scrollbar-track); }
+.fm-content::-webkit-scrollbar-thumb { background: var(--wm-scrollbar-thumb); }
+.fm-content::-webkit-scrollbar-thumb:hover { background: var(--wm-scrollbar-hover); }
+.detail-table { font-size: var(--wm-table-font); }
+.detail-table thead th { background: var(--wm-header); color: var(--wm-header-text); border: var(--wm-header-border-width) solid var(--wm-header-border); border-top: none; padding: var(--wm-header-y) var(--wm-header-x); }
+.detail-table thead th:hover { background: var(--wm-header-hover); }
+.detail-row td { padding: var(--wm-row-y) var(--wm-row-x); border-bottom: var(--wm-row-border-width) solid var(--wm-row-border); }
+.detail-row:hover { background: var(--wm-row-hover); }
+.detail-row.selected { background: var(--wm-selection); color: var(--wm-selection-text); }
+.detail-row.selected td { color: var(--wm-selection-text); }
+.cell-name { gap: var(--wm-name-gap); }
+.col-resize-handle { width: var(--wm-column-handle-width); }
+.col-resize-handle:hover, .col-resize-handle.resizing { background: var(--wm-column-handle-rgba); }
+.resize-handle.n, .resize-handle.s { left: var(--wm-resize-inset); right: var(--wm-resize-inset); height: var(--wm-edge-grab); }
+.resize-handle.n { top: calc(-0.5 * var(--wm-edge-grab)); }
+.resize-handle.s { bottom: calc(-0.5 * var(--wm-edge-grab)); }
+.resize-handle.e, .resize-handle.w { top: var(--wm-resize-inset); bottom: var(--wm-resize-inset); width: var(--wm-edge-grab); }
+.resize-handle.e { right: calc(-0.5 * var(--wm-edge-grab)); }
+.resize-handle.w { left: calc(-0.5 * var(--wm-edge-grab)); }
+.resize-handle.ne, .resize-handle.nw, .resize-handle.se, .resize-handle.sw { width: var(--wm-corner-grab); height: var(--wm-corner-grab); }
+.resize-handle.ne, .resize-handle.nw { top: calc(-0.4 * var(--wm-corner-grab)); }
+.resize-handle.se, .resize-handle.sw { bottom: calc(-0.4 * var(--wm-corner-grab)); }
+.resize-handle.ne, .resize-handle.se { right: calc(-0.4 * var(--wm-corner-grab)); }
+.resize-handle.nw, .resize-handle.sw { left: calc(-0.4 * var(--wm-corner-grab)); }
+.context-menu { background: var(--wm-menu); color: var(--wm-menu-text); border: var(--wm-menu-border-width) solid var(--wm-menu-border); padding: var(--wm-menu-padding); min-width: var(--wm-menu-min-width); box-shadow: inset -1px -1px var(--wm-button-dark), inset 1px 1px var(--wm-button-light), 2px 2px var(--wm-menu-shadow-blur) var(--wm-menu-shadow-rgba); max-height: calc(100vh - 8px); overflow-y: auto; }
+.ctx-item { padding: var(--wm-menu-item-y) var(--wm-menu-item-x); font-size: var(--wm-menu-font); }
+.ctx-item:hover { background: var(--wm-menu-hover); color: var(--wm-menu-hover-text); }
+.ctx-item.disabled { color: var(--wm-menu-disabled); }
+.ctx-item.disabled:hover { background: transparent; }
+.ctx-sep { height: var(--wm-menu-separator-height); margin: var(--wm-menu-separator-gap) 4px; background: var(--wm-menu-separator); }
+
+/* Settings is kept legible independently of experimental folder colors. */
+.app-settings-box { position: fixed; width: min(860px, calc(100vw - 24px)); height: min(690px, calc(100vh - 24px)); max-height: calc(100vh - 24px); padding: 0; display: flex; flex-direction: column; overflow: hidden; color: #111; font: 12px Tahoma, sans-serif; }
+.settings-titlebar { display: flex; align-items: center; justify-content: space-between; flex: 0 0 30px; padding: 0 8px 0 12px; color: white; background: linear-gradient(90deg, #007070, #00a6a6); font-weight: bold; cursor: move; touch-action: none; }
+.settings-titlebar button { cursor: pointer; width: 23px; height: 21px; padding: 0; }
+.settings-columns { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr); flex: 1 1 auto; min-height: 0; }
+.settings-general, .settings-appearance { min-width: 0; overflow: auto; padding: 10px 12px; }
+.settings-appearance { border-left: 1px solid #999; padding: 8px 10px; }
+.settings-general h2, .settings-appearance h2 { font-size: 12px; margin: 0; }
+.settings-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 4px; margin-bottom: 8px; }
+.settings-general .term-settings-row { gap: 8px; margin-bottom: 8px; }
+.settings-general .term-settings-row > span { min-width: 0; flex: 1; }
+.settings-general .term-settings-row input[type=text] { width: 48%; min-width: 0; }
+.settings-general .app-setting-help { font-size: 11px; margin-bottom: 10px; color: #444; }
+.settings-general .app-label-preview { padding: 9px; }
+.settings-appearance details { margin: 0 0 6px; padding: 5px 7px; border: 1px solid #999; min-width: 0; }
+.settings-appearance summary { font-size: 11px; font-weight: bold; padding: 1px 0; cursor: pointer; }
+.settings-appearance details[open] summary { margin-bottom: 4px; }
+.window-setting-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 24px; font-size: 11px; }
+.window-setting-row span { min-width: 0; }
+.window-setting-row input { flex: 0 0 65px; width: 65px; min-width: 0; height: 21px; padding: 1px 3px; font: 11px Tahoma, sans-serif; }
+.window-setting-row input[type=color] { padding: 0; }
+.app-settings-box > .modal-buttons { flex: 0 0 auto; border-top: 1px solid #999; padding: 8px 12px; }
+@media (max-width: 620px) {
+  .settings-general, .settings-appearance { padding: 6px; }
+  .settings-general .term-settings-row { flex-wrap: wrap; }
+  .window-setting-row { gap: 3px; }
+  .window-setting-row input { flex-basis: 48px; width: 48px; }
+}
+.window-system-menu { background: var(--wm-system-menu); color: var(--wm-system-menu-text); border: var(--wm-system-menu-border-width) solid var(--wm-system-menu-border); border-radius: var(--wm-system-menu-radius); min-width: var(--wm-system-menu-width); padding: var(--wm-system-menu-padding); font-size: var(--wm-system-menu-font); box-shadow: 2px 4px var(--wm-menu-shadow-blur) var(--wm-menu-shadow-rgba); }
+.window-system-menu button { padding: var(--wm-system-menu-y) var(--wm-system-menu-x); border-radius: var(--wm-system-menu-item-radius); }
+.window-system-menu button:focus { background: var(--wm-system-menu-hover); }
+.window-system-menu button span { color: var(--wm-system-menu-hint); margin-left: var(--wm-system-menu-gap); }
+.window-system-menu hr { border-top: var(--wm-menu-separator-height) solid var(--wm-menu-separator); margin: var(--wm-menu-separator-gap) 4px; }

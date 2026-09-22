@@ -1,0 +1,24 @@
+(async()=>{
+  const results=[],check=(ok,message)=>{if(!ok)throw Error(message);results.push(message);};
+  const previous={get:window.fm.getFolderLayoutOptions,set:window.fm.setFolderLayoutOptions,align:window.fm.realignLayout,layout:window.fm.getLayout};
+  let options={},layout={'item00':{x:777,y:222,size:44}};
+  window.fm.getFolderLayoutOptions=async()=>structuredClone(options);
+  window.fm.setFolderLayoutOptions=async(_dir,value)=>(options=structuredClone(value));
+  window.fm.getLayout=async()=>layout;
+  window.fm.realignLayout=async()=>{for(const value of Object.values(layout)){delete value.x;delete value.y;}};
+  const manager=new WindowManager(),win=new FMWindow(manager,{path:'/layout-test',x:20,y:20,width:630,height:450});manager.windows.push(win);
+  win.entries=Array.from({length:25},(_,i)=>({id:String(i),name:`item${String(i).padStart(2,'0')}`,kind:'file',color:'#aaa',isVirtual:true,bookmarked:i===0}));
+  const oldSize=AppSettings.current.iconSize;AppSettings.current.iconSize=30;
+  await FileView.render(win);await FileView.configureLayout(win,'offsetRows');
+  const content=win.el.querySelector('.fm-content'),cols=Math.max(1,Math.floor(content.clientWidth/100));
+  check(FileView.getIconPosition(win,String(cols)).x===62,'Offset Rows shifts the second row by half the grid spacing');
+  check(FileView.getIconPosition(win,'0').x===777,'Offset Rows preserves manually placed icons');
+  await FileView.configureLayout(win,'dontReflow');const before=win.entries.map(e=>FileView.getIconPosition(win,e.id));win.setBounds(20,20,350,450);await FileView.render(win);
+  check(win.entries.every((e,i)=>JSON.stringify(FileView.getIconPosition(win,e.id))===JSON.stringify(before[i])),'Don’t Reflow preserves all positions when resizing');
+  await FileView.configureLayout(win,'realign');check(FileView.getIconPosition(win,'0').x===12&&layout.item00.size===44,'Realign resets moved positions while preserving icon sizes');
+  const square=win.el.querySelector('[data-entry-id="0"] .icon-square');square.classList.add('has-native-icon');
+  check(getComputedStyle(square,'::after').borderTopStyle==='solid'&&getComputedStyle(square,'::after').borderTopWidth==='2px','Favorite outline survives native icon shadow overrides');
+  manager.close(win.id);AppSettings.current.iconSize=oldSize;
+  Object.assign(window.fm,{getFolderLayoutOptions:previous.get,setFolderLayoutOptions:previous.set,realignLayout:previous.align,getLayout:previous.layout});
+  return results;
+})();

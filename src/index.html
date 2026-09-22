@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self' file: data:; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+<title>File Manager</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="windowAppearance.css" />
+<link rel="stylesheet" href="vendor/xterm/xterm.css" />
+</head>
+<body>
+  <div id="desktop"></div>
+
+  <div id="floating-toolbar">
+    <div class="toolbar-grip" title="Drag toolbar">⠿</div>
+    <button id="btn-back" title="Back">◀</button>
+    <button id="btn-forward" title="Forward">▶</button>
+    <button id="btn-up" title="Up a directory">⬆ Up</button>
+    <button id="btn-toggle-view" title="Toggle icon / detail view">▦ View</button>
+    <button id="btn-new-folder" title="New folder in the active window">🗀+ New Folder</button>
+    <button id="btn-new-window" title="Open a new Home window">🗔+ New Window</button>
+    <button id="btn-new-terminal" title="Open a new terminal at Home">&gt;_ New Terminal</button>
+    <span id="toolbar-active-label">No active window</span>
+  </div>
+
+  <div id="context-menu" class="context-menu hidden"></div>
+
+  <script src="vendor/xterm/xterm.js"></script>
+  <script src="vendor/xterm/addon-fit.js"></script>
+  <script src="utils.js"></script>
+  <script src="clipboard.js"></script>
+  <script src="dialog.js"></script>
+  <script src="terminalSettings.js"></script>
+  <script src="windowAppearance.js"></script>
+  <script src="appSettings.js"></script>
+  <script src="nativeFileIcons.js"></script>
+  <script src="windowSystemMenu.js"></script>
+  <script src="windowManager.js"></script>
+  <script src="locationBar.js"></script>
+  <script src="utilityWindows.js"></script>
+  <script src="audioEncoding.js"></script>
+  <script src="audioRecorder.js"></script>
+  <script src="mediaPlayer.js"></script>
+  <script src="mediaPlayerEnhancements.js"></script>
+  <script src="iconAppearance.js"></script>
+  <script src="fileView.js"></script>
+  <script src="imageViewer.js"></script>
+  <script src="folderSearch.js"></script>
+  <script src="terminalWindow.js"></script>
+  <script src="desktopShortcuts.js"></script>
+  <script src="htmlBackground.js"></script>
+  <script src="desktopIconAppearance.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

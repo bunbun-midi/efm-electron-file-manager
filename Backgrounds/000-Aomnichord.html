@@ -1,0 +1,3871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>midichord</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --major-color: #ffffff;
+            --minor-color: #999999;
+            --seventh-color: #446b6b;
+            --seq-color: #ffb703;
+            --active-glow: #4ecdc4;
+            --del-color: #6338dc;
+            --del-glow: #b5179e;
+            --mode-bg: #2d2d2d;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            font-family: sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            
+            overscroll-behavior: none; /* Kills the iOS rubber-band bounce */
+                -webkit-touch-callout: none; /* Kills the long-press popups */
+                -webkit-user-select: none;
+                user-select: none;
+        }
+
+        /* Left Panel: Chords and Sequencer */
+        #chord-panel {
+            width: 60vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 1vh 1vw;
+            background: #252525;
+            border-right: 2px solid #444;
+            gap: 1.5vh;
+        }
+
+        #chord-buttons-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            min-height: 0;
+            position: relative; /* Added to contain absolute XY Pad overlay */
+        }
+
+        .chord-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 18%;
+            gap: 5px;
+        }
+
+        .btn {
+            flex: 1;
+            height: 80%;
+            margin: 0 4px;
+            border-radius: 12px;
+            border: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: clamp(10px, 1.4vw, 22px);
+            box-shadow: 0 4px #000;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.05s;
+        }
+
+        .major   { background: var(--major-color); color: #222; }
+        .minor   { background: var(--minor-color); color: #fff; }
+        .seventh { background: var(--seventh-color); color: #fff; }
+        .custom2 { background: #445588; color: #fff; }
+
+        .btn.active {
+            transform: translateY(4px);
+            box-shadow: 0 0px #000;
+            background: var(--active-glow) !important;
+            color: white;
+        }
+
+        /* XY PAD Overlay Styles */
+        #xy-pad-container {
+            position: absolute;
+            inset: 0;
+            background: rgba(30, 30, 30, 0.95);
+            backdrop-filter: blur(4px);
+            z-index: 20;
+            display: none;
+            border-radius: 8px;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .xy-cell {
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            background: rgba(26, 26, 26, 0.5);
+            cursor: crosshair;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+
+        .xy-cell span {
+            color: rgba(255, 255, 255, 0.15);
+            font-size: 10px;
+            pointer-events: none;
+            font-weight: bold;
+        }
+
+        .xy-cell.selected {
+            background: rgba(255, 183, 3, 0.4);
+            border: 1px solid #ffb703;
+        }
+
+        /* Sequencer Area */
+        #sequencer-container {
+            height: 28%;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background: #181818;
+            border-radius: 8px;
+            padding: 8px 10px;
+            border: 1px solid #333;
+            flex-shrink: 0;
+        }
+
+        .seq-header {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .seq-mode-row {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            background: #111;
+            padding: 3px;
+            border-radius: 6px;
+            border: 1px solid #2a2a2a;
+        }
+
+        .rhythm-btn {
+            background: var(--mode-bg);
+            color: #aaa;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 9px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.1s;
+        }
+
+        .rhythm-btn.active {
+            background: var(--seq-color);
+            color: #000;
+            border-color: #fff;
+        }
+
+        #seq-midi-text {
+            flex: 1;
+            background: #111;
+            color: var(--seq-color);
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-family: monospace;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        #seq-midi-text:focus {
+            border-color: var(--seq-color);
+            box-shadow: 0 0 5px rgba(255, 183, 3, 0.4);
+        }
+
+        #seq-length-display {
+            width: 40px;
+            background: #111;
+            color: var(--active-glow);
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 3px 4px;
+            font-family: monospace;
+            font-size: 12 px;
+            font-weight: bold;
+            text-align: center;
+            outline: none;
+        }
+
+        #sequencer-keyboard {
+            display: flex;
+            overflow-x: auto;
+            overflow-y: hidden;
+            flex: 1;
+            border: 1px solid #333;
+            border-radius: 6px;
+            background: #111;
+            padding: 2px;
+            scroll-behavior: smooth;
+        }
+
+        #sequencer-keyboard::-webkit-scrollbar { height: 8px; }
+        #sequencer-keyboard::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+        .seq-key-w {
+            /* flex: 0 (grow) 0 (shrink) 32px (basis) */
+            flex: 0 0 32px !important;
+            background: #e0e0e0;
+            margin: 0 1px;
+            border-radius: 2px;
+            height: 100%;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 4px;
+            box-sizing: border-box;
+        }
+
+        .seq-key-w span {
+            color: #555;
+            font-size: 3px;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        .seq-key-b {
+            z-index: 10;
+            background: #222;
+            border: 1px solid #111;
+            /* THE FIX: Force the browser to respect the 20px width even while scrolling */
+            flex: 0 0 20px !important;
+            height: 60%;
+            margin-left: -10px; /* Overlap math */
+            margin-right: -10px; /* Overlap math */
+            border-radius: 0 0 2px 2px;
+            box-sizing: border-box;
+        }
+
+        .seq-key-w:active { background: var(--seq-color); }
+        .seq-key-b:active { background: #664901; border-color: var(--seq-color); }
+
+        /* Center Panel: Controls */
+        #controls-panel {
+            width: 25vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px 12px;
+            background: #181818;
+            border-right: 2px solid #333;
+            gap: 10px;
+            
+            /* --- NEW SCROLLING PROPERTIES --- */
+                overflow-y: auto;                  /* Only scrolls if the content exceeds the screen height */
+                touch-action: pan-y !important;    /* Overrides our global touch block, allowing vertical drag */
+                -webkit-overflow-scrolling: touch; /* Enables smooth, native-feeling momentum scrolling on iOS */
+            }
+        }
+
+        .ctrl-group { display: flex; flex-direction: column; gap: 1px; }
+        .ctrl-row { display: flex; align-items: center; gap: 1px; height: 28px; flex-shrink: 0; }
+        .block-row { display: flex; align-items: center; gap: 1px; height: 60px; flex-shrink: 0; }
+        .ctrl-label {
+            color: #888; font-size: 6px; font-weight: bold;
+            letter-spacing: 0.02em; white-space: nowrap; width: 30px;
+            text-align: right; flex-shrink: 0;
+        }
+        .ctrl-row input[type=range]{ flex: 1; height: 4px; accent-color: var(--active-glow); cursor: pointer; }
+        /*.ctrl-row input[type=range] { flex: 1; height: 4px; accent-color: var(--active-glow); cursor: pointer; } */
+
+        .ctrl-row-pitch-selector { display: flex; flex-direction: column; gap: 2px; width: 100%; flex-shrink: 0; }
+        
+        .semitone-matrix {
+            display: flex; position: relative; width: 100%; height: 55px;
+            background: #111; border: 1px solid #333; border-radius: 1px; padding: 2px; user-select: none;
+        }
+        .semi-key { cursor: pointer; position: relative; transition: background 0.15s, box-shadow 0.15s; }
+        .semi-key.white {
+            flex: 1; background: #e0e0e0; margin: 0 1px; border-radius: 2px; height: 100%;
+            display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px;
+        }
+        .semi-key.white span { color: #444; font-size: 8px; font-weight: bold; pointer-events: none; }
+        .semi-key.black {
+            z-index: 10; background: #222; border: 1px solid #111; width: 4.5%; height: 60%;
+            margin-left: -2.25%; margin-right: -2.25%; border-radius: 0 0 2px 2px;
+        }
+
+        .semi-key.white.active {
+            background: linear-gradient(to top, rgba(78, 205, 196, 0.95), rgba(240, 240, 240, 0.65));
+            box-shadow: inset 0 -4px 10px rgba(78, 205, 196, 0.5), 0 0 8px rgba(78, 205, 196, 0.3);
+        }
+        .semi-key.white.active span { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+        .semi-key.black.active { background: linear-gradient(to bottom, #1a4d49, #4ecdc4); box-shadow: 0 0 8px rgba(78, 205, 196, 0.6); border-color: #4ecdc4; }
+
+        .ctrl-btn {
+            background: #333;
+            color: #ccc;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 9px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .ctrl-btn:active { background: var(--active-glow); color: #fff; }
+
+        .rest-btn {
+            background: #1a4d49;
+            color: #dee;
+            border: 1px solid var(--active-glow);
+            border-radius: 2px;
+            padding: 5px 8px;
+            font-size: 8px;
+			font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .rest-btn:active { background: var(--active-glow); }
+
+        .del-btn {
+            background: var(--del-color);
+            color: #eee;
+            border: 1px solid var(#cccccc);
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-size: 8px;
+			font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .del-btn:active { background: var(--del-glow); }
+
+        #block-matrix-container {
+            flex: 1;
+            height: 62px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+        #block-matrix-container::-webkit-scrollbar { height: 4px; }
+        #block-matrix-container::-webkit-scrollbar-thumb { background: #333; }
+
+        .sequence-block {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            border-radius: 4px;
+            background: var(--seq-color);
+            cursor: pointer;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            border: 1px solid transparent;
+        }
+        .sequence-block.highlighted {
+            border: 1px solid var(--active-glow);
+            outline: 1px solid var(--active-glow);
+            box-shadow: 0 0 6px var(--active-glow);
+        }
+        .sequence-block.playing-now {
+            background: #fff !important;
+            box-shadow: 0 0 10px #fff;
+        }
+
+        #midi-status {
+            display: flex; flex-direction: column; gap: 6px;
+            flex-shrink: 0; border-top: 1px solid #2a2a2a; padding-top: 1px;
+        }
+        .status-row { display: flex; align-items: center; gap: 6px; height: 24px; width: 100%; }
+        #midi-indicator { width: 8px; height: 8px; border-radius: 50%; background: #333; flex-shrink: 0; }
+        #midi-indicator.connected { background: #4ecdc4; box-shadow: 0 0 5px #4ecdc4; }
+        #midi-indicator.error     { background: #ff6b6b; box-shadow: 0 0 5px #ff6b6b; }
+        #midi-indicator.sending   { background: #fff;    box-shadow: 0 0 7px #fff; }
+        #midi-output-select {
+            flex: 1; background: #1a1a1a; color: #aaa; border: 1px solid #333;
+            border-radius: 5px; font-size: 10px; padding: 4px 6px; cursor: pointer; min-width: 0;
+        }
+
+        .patch-field {
+            flex: 1; background: #111; border: 1px solid #333;
+            border-radius: 4px; font-size: 9px; padding: 3px 6px; font-family: monospace; outline: none;
+            min-width: 0; text-overflow: ellipsis;
+        }
+        #patch-output-text { color: #888; }
+        #patch-input-text { color: #fff; }
+        #patch-input-text::placeholder { color: #555; }
+        .patch-field:focus { border-color: var(--active-glow); }
+
+        #strum-panel {
+            width: 15vw;
+            height: 100vh;
+            padding: 10px 6px;
+            background: #111;
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+            touch-action: none !important;
+        }
+
+        .strum-plate {
+            flex: 1;
+            background: linear-gradient(to bottom, #111, #222, #111);
+            border: 2px solid #444;
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            min-height: 0;
+            touch-action: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        
+        #strum-plate-2 { border-color: #664901; display:none;}
+
+        .string {
+            position: absolute;
+            width: 100%;
+            height: 1px;
+            background: rgba(78, 205, 196, 0.2);
+            pointer-events: none;
+            transition: background 0.15s ease-out;
+        }
+        
+        #strum-plate-2 .string { background: rgba(255, 183, 3, 0.2); }
+
+        #overlay {
+            position: fixed; inset: 0; background: #000; color: white;
+            z-index: 9999; display: flex; justify-content: center; align-items: center; text-align: center;
+        }
+    </style>
+	<script>
+// --- THE MASTER AUDIO TOLLBOOTH v3 ---
+(function() {
+    const AudioCtx = window.AudioContext;
+    const WebkitCtx = window.webkitAudioContext;
+    if (!AudioCtx && !WebkitCtx) return;
+
+    function rigTollbooth(ctx) {
+        if (ctx.__masterTollbooth) return ctx; // Already rigged
+
+        try {
+            const tollbooth = ctx.createGain();
+            const realDest = ctx.destination;
+            tollbooth.connect(realDest);
+
+            ctx.__masterTollbooth = tollbooth;
+            ctx.__realDestination = realDest;
+
+            Object.defineProperty(ctx, 'destination', {
+                get: () => tollbooth
+            });
+
+            window.__OMNI_FLARE = ctx; // Broadcast to the bottom script
+        } catch (e) {
+            console.error('Audio tollbooth setup failed', e);
+        }
+        return ctx;
+    }
+
+    if (AudioCtx) {
+        window.AudioContext = function(...args) {
+            try { return rigTollbooth(new AudioCtx(...args)); }
+            catch (e) { console.error('AudioContext construct failed', e); throw e; }
+        };
+        window.AudioContext.prototype = AudioCtx.prototype;
+    }
+    if (WebkitCtx) {
+        window.webkitAudioContext = function(...args) {
+            try { return rigTollbooth(new WebkitCtx(...args)); }
+            catch (e) { console.error('webkitAudioContext construct failed', e); throw e; }
+        };
+        window.webkitAudioContext.prototype = WebkitCtx.prototype;
+    }
+})();
+        
+        function uint8ToBase64(u8Arr) {
+            let CHUNK_SIZE = 0x8000;
+            let c = [];
+            for (let i = 0; i < u8Arr.length; i += CHUNK_SIZE) {
+                c.push(String.fromCharCode.apply(null, u8Arr.subarray(i, i + CHUNK_SIZE)));
+            }
+            return btoa(c.join(""));
+        }
+
+        window.onAndroidMidiLoaded = function(base64Data) {
+        try {
+            let binaryString = atob(base64Data);
+            let len = binaryString.length;
+            let bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            if (typeof parseMidiBuffer === 'function') parseMidiBuffer(bytes.buffer);
+        } catch (e) {
+            console.error('Failed to load MIDI from Android', e);
+        }
+        };
+</script>
+</head>
+<body>
+
+<div id="overlay" onclick="typeof startApp==='function'&&startApp()">
+    <div>
+        <h1>midichord</h1>
+        <p>Tap to start</p>
+    </div>
+</div>
+
+<div id="ord-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:#181818; border:2px solid #06d6a0; padding:20px; border-radius:10px; z-index:10000; flex-direction:column; gap:12px; box-shadow:0 10px 40px rgba(0,0,0,0.9); min-width: 500px;">
+    <div style="color:#06d6a0; font-size:14px; font-weight:bold; letter-spacing:1px; text-align:center;">CUSTOM CHORD ORDER</div>
+    <div style="display:flex; gap:8px;">
+        <input type="text" id="ord-input" class="patch-field" style="flex:1; font-size:12px; padding:6px; color:#4DC4C0" value="Db,Ab,Eb,Bb,F,C,G,D,A,E,B,F#">
+        <button id="btn-ord-conf" class="btn-main" style="background:#06d6a0; color:#121212; padding:6px 12px; font-size:11px;">Conf</button>
+    </div>
+    <select id="ord-presets" class="patch-field" style="width:100%; height:30px; color:#4DC4C0; font-size:11px;">
+        <option value="Db,Ab,Eb,Bb,F,C,G,D,A,E,B,F#" style="color:#4dc4c0;">Default (Circle of Fifths)</option>
+        <option value="C,G,D,A,E,B,F#,Db,Ab,Eb,Bb,F" style="color:#4dc4c0;">C Start (Circle of Fifths)</option>
+        <option value="C,A,F,G,D,E,Bb,Eb,Ab,Db,Gb,B" style="color:#4dc4c0;">Option 2 (C, A, F, G, D, E...)</option>
+        <option value="F,C,G,D,A,E,B,F#,Db,Ab,Eb,Bb" style="color:#4dc4c0;">Option 3 (F, C, G, D, A, E...)</option>
+		<option value="C,Db,D,Eb,E,F,F#,G,Ab,A,Bb,B" style="color:#4dc4c0;">Ascending order C -> B</option>
+    </select>
+    <button id="btn-ord-close" class="ctrl-btn" style="align-self:center; width:100%; margin-top:5px; padding:6px;">CLOSE</button>
+</div>
+
+<div id="tone-modal-window" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(0%, -50%); background: #2a2a2a; border: 2px solid #444; box-shadow: 0 4px 15px rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; z-index: 12000; width: 250px; font-family: sans-serif; color: #fff;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 5px;">
+    <span style="font-weight: bold; font-size: 14px;">Select Engine Tone</span>
+    <button id="tone-modal-close" style="background: none; border: none; color: #aaa; cursor: pointer; font-size: 16px; font-weight: bold;">&times;</button>
+    </div>
+
+<div style="margin-bottom: 15px;">
+    <label for="tone-dropdown" style="display: block; font-size: 11px; color: #aaa; margin-bottom: 4px;">WAVEFORM / ROUTE</label>
+    <select id="tone-dropdown" style="width: 100%; height: 30px; background: #111; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 2px 5px; outline: none;"></select>
+</div>
+</div>
+
+<div id="chord-panel">
+    <div id="chord-buttons-container">
+        <div id="xy-pad-container"></div>
+        
+        <div class="chord-row" id="row-major"></div>
+        <div class="chord-row" id="row-minor"></div>
+        <div class="chord-row" id="row-7th"></div>
+        <div class="chord-row" id="row-custom"></div>
+        <div class="chord-row" id="row-custom2"></div>
+    </div>
+    <div id="sequencer-container">
+        <div class="seq-header">
+            <button id="insert-rest-btn" class="rest-btn">REST</button>
+            <button id="delete-seq-btn" class="del-btn">DEL</button>
+            
+            <div class="seq-mode-row">
+                <button class="rhythm-btn" id="rhythm-btn-8th" data-suffix="-">8th</button>
+                <button class="rhythm-btn active" id="rhythm-btn-16th" data-suffix="">16th</button>
+                <button class="rhythm-btn" id="rhythm-btn-dot8th" data-suffix="--">Dot 8th</button>
+                <button class="rhythm-btn" id="rhythm-btn-trip8th" data-suffix="#">Trip 8th</button>
+            </div>
+			
+            <input type="text" id="seq-length-display" value="0" readonly title="Sequence length in sixteenth notes">
+            <input type="text" id="seq-midi-text" value="" placeholder="sequence text" onblur="resetIOSLayout()">
+        </div>
+        <div id="sequencer-keyboard"></div>
+    </div>
+</div>
+
+<div id="controls-panel">
+    <div class="ctrl-group">
+        <div class="ctrl-row" style="height: 10px; align-items: stretch;">
+            <span class="ctrl-label">AUDIO SUS</span>
+            <input type="range" id="sustain" min="0.1" max="4.0" step="0.1" value="1.5">
+        </div>
+
+        <div class="ctrl-row" style="height: 10px; align-items: stretch;">
+            <span class="ctrl-label">MIDI SUS</span>
+            <input type="range" id="noteoff-delay" min="0.05" max="4.0" step="0.05" value="0.5">
+        </div>
+
+        <div class="ctrl-row" style="height: 10px; align-items: stretch;">
+            <span class="ctrl-label">OCT</span>
+            <input type="range" id="octave-shift" min="-3" max="3" step="1" value="0">
+        </div>
+
+        <div class="ctrl-row" style="height: 10px; align-items: stretch;">
+            <span class="ctrl-label">Tr: <span id="transpose-val">0</span></span>
+            <input type="range" id="transpose" min="-12" max="12" step="1" value="0">
+        </div>
+    </div>
+	
+	<div class="ctrl-row">
+        <span class="ctrl-label">CH / PRG</span>
+        <select id="midi-channel-select" class="ctrl-btn" style="flex: 0.4; margin-right: 2px;"></select>
+        <select id="midi-program-select" class="ctrl-btn" style="flex: 1; text-align: left;"></select>
+    </div>
+
+    <div class="ctrl-group">
+        <div class="ctrl-row-pitch-selector">
+            <div id="semitone-matrix" class="semitone-matrix"></div>
+        </div>
+
+        <div class="ctrl-row-pitch-selector">
+            <div id="semitone-matrix2" class="semitone-matrix"></div>
+        </div>
+    </div>
+
+    <div class="ctrl-group" style="border-top: 1px solid #2a2a2a;">
+        <div class="ctrl-row">
+            <span class="ctrl-label"><span id="bpm-val">120</span></span>
+            <input type="range" id="bpm-slider" min="1" max="360" step="1" value="120">
+        </div>
+        <div class="block-row"><div id="block-matrix-container"></div></div>
+        <div class="ctrl-row" style="height: auto; align-items: stretch;">
+            
+            <div style="display:flex; flex-direction:column; gap:4px; width:80px; flex-shrink:0;">
+                <button id="tap-bpm" class="ctrl-btn" style="width:100%;">TAP BPM</button>
+                <button id="btn-seqw" class="ctrl-btn" style="width:100%; color:#4ecdc4;">SEQW</button>
+            </div>
+            
+            <div style="display:flex; flex-direction:column; gap:4px; width:80px; flex-shrink:0;">
+                <button id="play-seq" class="ctrl-btn" style="width:100%; color: var(--seq-color); border-color: #664901;">PLAY SEQ</button>
+                <button id="play-song" class="ctrl-btn" style="width:100%; color:#ff6b6b; border-color:#5c1d1d;">PLAY SONG</button>
+            </div>
+        </div>
+
+        <div class="ctrl-row" style="justify-content: flex-end; gap: 4px; height: auto;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <button id="btn-seqr" class="ctrl-btn" style="font-size:8px; padding:3px 5px;">SEQR</button>
+                <button id="btn-seqd" class="ctrl-btn" style="font-size:8px; padding:3px 5px; color:#ff6b6b;">SEQD</button>
+            </div>
+            <button id="btn-seqc" class="ctrl-btn" style="font-size:8px; padding:3px 5px; height: 100%;">SEQC</button>
+            <button id="btn-sequ" class="ctrl-btn" style="font-size:8px; padding:3px 5px; height: 100%;">SEQU</button>
+            <span style="color:#444; margin:0 2px; align-self: center;">|</span>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <button id="btn-movl" class="ctrl-btn" style="font-size:8px; padding:3px 5px;">MOVL</button>
+                <button id="btn-movr" class="ctrl-btn" style="font-size:8px; padding:3px 5px;">MOVR</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="midi-status">
+        <div id="performance-controls" style="display:flex; flex-direction:column; gap:6px; padding-bottom:6px; margin-bottom:6px; border-bottom:1px solid #2a2a2a;">
+            <div style="display:flex; gap:6px;">
+                <button id="btn-perf-rec" class="ctrl-btn" style="flex:1; color:#ff6b6b; border-color:#5c1d1d;">REC</button>
+                <button id="btn-perf-stop" class="ctrl-btn" style="flex:1;">STOP</button>
+                <button id="btn-perf-play" class="ctrl-btn" style="flex:1; color:#4ecdc4; border-color:#1a4d49;">PLAY</button>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button id="btn-perf-load" class="ctrl-btn" style="flex:1; color:#aaa; border-color:#444;">LOAD .MID</button>
+                <button id="btn-perf-exp" class="ctrl-btn" style="flex:1; color:#aaa; border-color:#444;">EXP .MID</button>
+				<button id="btn-song-grid-exp" class="ctrl-btn" style="flex:1; color:#ffb703; border-color:#664901;">EXP S.MIDI</button>
+            </div>
+            <input type="file" id="midi-file-input" accept=".mid" style="display:none;">
+        </div>
+
+        <div id="xy-pad-controls" style="display:flex; flex-direction:column; gap:6px; padding-bottom:8px; border-bottom:1px solid #2a2a2a; margin-bottom:2px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+				<button id="tone-select-trigger" class="ctrl-btn">Tone: Sine</button>
+
+				
+			
+			
+                <button id="btn-ord-toggle" class="ctrl-btn" style="flex:0 0 35px; border-color:#06d6a0; color:#06d6a0; padding: 4px 2px;">ORD</button>
+                <button id="btn-xypad-toggle" class="ctrl-btn" style="flex:1; border-color:var(--active-glow); color:var(--active-glow);">XYPAD</button>
+                <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
+                    <div class="ctrl-row" style="height:auto;">
+                        <span class="ctrl-label" style="width:16px;">X:<span id="xy-x-val">12</span></span>
+                        <input type="range" id="xy-x-slider" min="1" max="24" value="12">
+                    </div>
+                    <div class="ctrl-row" style="height:auto;">
+                        <span class="ctrl-label" style="width:16px;">Y:<span id="xy-y-val">5</span></span>
+                        <input type="range" id="xy-y-slider" min="1" max="16" value="5">
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button id="btn-xy-sel" class="ctrl-btn" style="flex:1;">SEL</button>
+                <button id="btn-xy-sup" class="ctrl-btn" style="flex:1;">SUP</button>
+                <button id="btn-xy-sdn" class="ctrl-btn" style="flex:1;">SDN</button>
+            </div>
+            <select id="xy-scale-select" class="ctrl-btn" style="width: 100%; height: 24px; padding: 2px 6px; background: #1a1a1a; color: #aaa; border: 1px solid #333; outline: none;"></select>
+        </div>
+
+        <div class="status-row">
+            <span id="midi-indicator"></span>
+            <select id="midi-output-select"></select>
+        </div>
+        <div class="status-row" style="margin-top: 2px;">
+            <input type="text" id="patch-output-text" class="patch-field" placeholder="Export state data..." readonly onclick="this.select()">
+            <button id="btn-patch-copy" class="ctrl-btn" style="font-size:8px; padding:4px 6px; width:45px;">COPY</button>
+        </div>
+        <div class="status-row" style="margin-top: 1px;">
+            <input type="text" id="patch-input-text" class="patch-field" placeholder="Paste patch string here to load...">
+            <button id="btn-patch-load" class="ctrl-btn" style="font-size:8px; padding:4px 6px; color:#4ecdc4; width:45px;">LOAD</button>
+        </div>
+    </div>
+</div>
+
+<div id="strum-panel">
+    <div id="strum-plate-2" class="strum-plate"></div>
+    <div id="strum-plate-1" class="strum-plate"></div>
+</div>
+
+<script>
+    // ─── Scalemode Data Library ─────────────────────────────────────────
+    const rawScaleData = `
+=^=Modes
+Ionian (Major)=~=C D E F G A B C
+Dorian=~=C D E♭ F G A B♭ C
+Phrygian=~=C D♭ E♭ F G A♭ B♭ C
+Lydian=~=C D E F♯ G A B C
+Mixolydian=~=C D E F G A B♭ C
+Aeolian (Natural Minor)=~=C D E♭ F G A♭ B♭ C
+Locrian=~=C D♭ E♭ F G A♭ B♭ C
+=^=Minor Variants
+Harmonic Minor=~=C D E♭ F G A♭ B C
+Melodic Minor=~=C D E♭ F G A B C
+Phrygian Dominant=~=C D♭ E F G A♭ B♭ C
+Harmonic Major=~=C D E F G A♭ B C
+=^=Pentatonic & Blues
+Major Pentatonic=~=C D E G A C
+Minor Pentatonic=~=C E♭ F G B♭ C
+Blues Scale=~=C E♭ F G♭ G B♭ C
+=^=Bebop
+Bebop Dominant=~=C D E F G A B♭ B C
+Bebop Major=~=C D E F G A♭ A B C
+=^=Symmetric
+Whole Tone=~=C D E F♯ G♯ A♯ C
+Diminished (Whole-Half)=~=C D E♭ F F♯ G♯ A B C
+Diminished (Half-Whole)=~=C D♭ E♭ E G♭ G A B C
+Augmented=~=C D E♭ E G♭ G♯ A C
+Chromatic=~=C D♭ D E♭ E F G♭ G A♭ A B♭ B C
+=^=Jazz/Altered (7-8 note)
+Altered (Super Locrian)=~=C D♭ E♭ E G♭ A♭ B♭ C
+Lydian Dominant (Acoustic)=~=C D E F♯ G A B C
+Lydian Augmented=~=C D E♭ F♯ G♯ A B C
+Lydian Diminished=~=C D E♭ F♯ G A B C
+Locrian ♮6=~=C D♭ E♭ F G A B♭ C
+Major Locrian=~=C D E F♯ G A♭ B C
+Half Diminished (Locrian ♮2)=~=C D E♭ F G A♭ B♭ C
+=^=Hungarian/Gypsy
+Hungarian Minor=~=C D E♭ F G A♭ B C
+Hungarian Major=~=C D E F♯ G A B C
+Gypsy Scale=~=C D E♭ F G A♭ B C
+Ukrainian Dorian=~=C D E♭ F G A B♭ C
+=^=Middle Eastern
+Double Harmonic (Byzantine)=~=C D♭ E F G♭ A♭ B C
+Arabic=~=C D♭ E F G A♭ B C
+Persian=~=C D♭ E F G♭ A♭ B C
+=^=Neapolitan
+Neapolitan Major=~=C D E♭ F♯ G A B C
+Neapolitan Minor=~=C D E♭ F G A♭ B♭ C
+=^=Japanese
+Hirajoshi=~=C D E♭ G A♭ C
+In Sen=~=C D♭ E♭ G A♭ C
+Iwato=~=C D♭ E♭ G♭ A♭ C
+Yo Scale=~=C D E G A C
+=^=Exotic
+Enigmatic=~=C D♭ E F♯ G♯ A♯ B C
+Prometheus=~=C D E F♯ G♯ B C
+Tritone=~=C D♭ E F♯ G♯ B♭ C
+Istrian=~=C D♭ E♭ F♯ G♯ A♯ C
+    `;
+
+    const xyNoteToOffset = {
+        'C': 0, 'D♭': 1, 'D': 2, 'E♭': 3, 'E': 4,
+        'F': 5, 'F♯': 6, 'G♭': 6, 'G': 7, 'G♯': 8, 'A♭': 8,
+        'A': 9, 'A♯': 10, 'B♭': 10, 'B': 11
+    };
+
+    // ─── .mid Binary Helpers ───────────────────────────────────────────────
+    function toVLQ(val) {
+        let buffer = [val & 0x7F];
+        while (val >>= 7) buffer.unshift((val & 0x7F) | 0x80);
+        return buffer;
+    }
+
+    function parseVLQ(data, offset) {
+        let val = 0, b;
+        do {
+            b = data[offset++];
+            val = (val << 7) | (b & 0x7F);
+        } while (b & 0x80);
+        return { val, offset };
+    }
+
+    // ─── Performance Recording Engine (Stateful Capture) ────────────────
+    let performanceEvents = [];
+    let performanceStartTime = 0;
+    let performanceState = "IDLE"; // IDLE, RECORDING, PLAYING
+    let playbackIndex = 0;
+    let playbackStartTime = 0;
+
+    function recordEvent(type, data) {
+        if (performanceState !== "RECORDING") return;
+        performanceEvents.push({
+            time: performance.now() - performanceStartTime,
+            type: type,
+            data: data
+        });
+    }
+
+    function initPerformanceRecorder() {
+        const btnRec = document.getElementById('btn-perf-rec');
+        const btnStop = document.getElementById('btn-perf-stop');
+        const btnPlay = document.getElementById('btn-perf-play');
+        const btnExp = document.getElementById('btn-perf-exp');
+        const btnLoad = document.getElementById('btn-perf-load');
+        const fileInput = document.getElementById('midi-file-input');
+        if (!btnRec || !btnStop || !btnPlay || !btnExp || !btnLoad) return;
+
+        btnRec.addEventListener('click', () => {
+            if (performanceState === "PLAYING") stopPerformancePlayback();
+            performanceState = "RECORDING";
+            performanceEvents = [];
+            performanceStartTime = performance.now();
+            
+            // Log initial UI state so export logic knows where we started
+            recordEvent("OCTAVE", { val: parseInt(document.getElementById('octave-shift').value, 10) });
+            recordEvent("TRANSPOSE", { val: parseInt(document.getElementById('transpose').value, 10) });
+            recordEvent("SUSTAIN", { val: parseFloat(document.getElementById('sustain').value) });
+            recordEvent("NOTEOFF", { val: parseFloat(document.getElementById('noteoff-delay').value) });
+
+            btnRec.style.background = '#ff6b6b';
+            btnRec.style.color = '#fff';
+            btnPlay.style.background = '#333';
+            btnPlay.style.color = '#4ecdc4';
+        });
+
+        btnStop.addEventListener('click', () => {
+            if (performanceState === "PLAYING") {
+                stopPerformancePlayback();
+            } else if (performanceState === "RECORDING") {
+                performanceState = "IDLE";
+                btnRec.style.background = '#333';
+                btnRec.style.color = '#ff6b6b';
+            }
+        });
+
+        btnPlay.addEventListener('click', () => {
+            if (performanceState === "RECORDING") {
+                performanceState = "IDLE";
+                btnRec.style.background = '#333';
+                btnRec.style.color = '#ff6b6b';
+            }
+            if (performanceEvents.length === 0) return;
+            
+            if (performanceState === "PLAYING") stopPerformancePlayback();
+            
+            performanceState = "PLAYING";
+            playbackStartTime = performance.now();
+            playbackIndex = 0;
+            
+            btnPlay.style.background = '#4ecdc4';
+            btnPlay.style.color = '#000';
+            
+            playbackLoop();
+        });
+
+        btnExp.addEventListener('click', exportMidiFile);
+        
+        btnLoad.addEventListener('click', () => {
+            if (window.AndroidMidiBridge && typeof window.AndroidMidiBridge.loadFile === 'function') {
+            // We are on Android! Tell Kotlin to open the file picker.
+            window.AndroidMidiBridge.loadFile();
+            } else {
+            // We are on Desktop! Create a temporary file picker in memory on the fly.
+            let tempInput = document.createElement('input');
+            tempInput.type = 'file';
+            tempInput.accept = '.mid,.midi';
+
+            tempInput.onchange = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                // Pass the loaded file directly into your parser
+                parseMidiBuffer(evt.target.result);
+                };
+                reader.readAsArrayBuffer(file);
+             };
+
+        // Simulate a click on the temporary input to open the browser dialogue
+            tempInput.click();
+        }
+});
+
+        fileInput && fileInput.addEventListener('change', importMidiFile);
+		
+		var songGridExp = document.getElementById('btn-song-grid-exp');
+		if (songGridExp) songGridExp.addEventListener('click', exportSongSequenceToQuantizedMidi)
+    }
+
+    function exportMidiFile() {
+        if (performanceEvents.length === 0) return alert("No performance recorded to export.");
+        
+        let absEvents = [];
+        let currentOct = 0, currentTrans = 0, currentNoteOff = 0.5;
+
+        // Walk timeline to bake absolute pitches and note-offs
+        performanceEvents.forEach(ev => {
+            if (ev.type === "OCTAVE") currentOct = ev.data.val;
+            if (ev.type === "TRANSPOSE") currentTrans = ev.data.val;
+            if (ev.type === "NOTEOFF") currentNoteOff = ev.data.val;
+
+            if (ev.type === "NOTE_ON") {
+                let actualPitch = ev.data.basePitch + (currentOct * 12) + currentTrans;
+                actualPitch = Math.max(0, Math.min(127, actualPitch));
+                
+                absEvents.push({ time: ev.time, type: 0x90, note: actualPitch, vel: 100 });
+                absEvents.push({ time: ev.time + (currentNoteOff * 1000), type: 0x80, note: actualPitch, vel: 0 });
+            }
+        });
+
+        absEvents.sort((a, b) => a.time - b.time);
+
+        const PPQ = 480;
+        const exportBpm = parseInt(document.getElementById('bpm-slider').value, 10);
+        let trackData = [];
+        
+        // Write Tempo Meta Event
+        let mpqn = Math.floor(60000000 / exportBpm);
+        trackData.push(0x00, 0xFF, 0x51, 0x03, (mpqn >> 16) & 0xFF, (mpqn >> 8) & 0xFF, mpqn & 0xFF);
+
+        let lastTicks = 0;
+        absEvents.forEach(ev => {
+            let ticks = Math.round((ev.time / (60000 / exportBpm)) * PPQ);
+            let delta = Math.max(0, ticks - lastTicks);
+            lastTicks = ticks;
+            
+            trackData.push(...toVLQ(delta));
+            trackData.push(ev.type | 0); // Channel 0
+            trackData.push(ev.note);
+            trackData.push(ev.vel);
+        });
+
+        // Track End
+        trackData.push(0x00, 0xFF, 0x2F, 0x00);
+
+        let header = [
+            0x4D, 0x54, 0x68, 0x64, // MThd
+            0x00, 0x00, 0x00, 0x06, // Length 6
+            0x00, 0x00,             // Type 0 (Single Track)
+            0x00, 0x01,             // 1 Track
+            (PPQ >> 8) & 0xFF, PPQ & 0xFF 
+        ];
+
+        let trackHeader = [
+            0x4D, 0x54, 0x72, 0x6B, // MTrk
+            (trackData.length >> 24) & 0xFF,
+            (trackData.length >> 16) & 0xFF,
+            (trackData.length >> 8) & 0xFF,
+            trackData.length & 0xFF
+        ];
+
+        let midiArray = new Uint8Array([...header, ...trackHeader, ...trackData]);
+        let filename = "Omnichord_Performance.mid";
+
+        if (window.AndroidMidiBridge && typeof window.AndroidMidiBridge.exportFile === 'function') {
+            // Route to Android Native Share/Save
+            window.AndroidMidiBridge.exportFile(uint8ToBase64(midiArray), filename);
+        } else if (window.iOSMidiBridge && typeof window.iOSMidiBridge.exportFile === 'function') {
+            // Route to iOS Native Share Sheet
+            window.iOSMidiBridge.exportFile(uint8ToBase64(midiArray), filename);
+        } else {
+            // Standard Desktop Browser Blob Download
+            let blob = new Blob([midiArray], { type: "audio/midi" });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+}
+
+    function importMidiFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            const data = new Uint8Array(evt.target.result);
+            
+            // Check strictly for standard MThd bytes and safe minimum length
+            if (data.length < 14 || data[0] !== 0x4D || data[1] !== 0x54 || data[2] !== 0x68 || data[3] !== 0x64) {
+                return alert("Invalid MIDI file header format.");
+            }
+            
+            // Format (2 bytes), Tracks (2 bytes), PPQ (2 bytes)
+            let format = (data[8] << 8) | data[9];
+            let numTracks = (data[10] << 8) | data[11];
+            let ppq = (data[12] << 8) | data[13];
+            let offset = 14;
+            
+            let newEvents = [];
+            let importBpm = parseInt(document.getElementById('bpm-slider').value, 10) || 120;
+            
+            // Live un-baking base slider values
+            let curOct = parseInt(document.getElementById('octave-shift').value, 10);
+            let curTrans = parseInt(document.getElementById('transpose').value, 10);
+
+            // Read through ALL tracks (Safe Multi-track Type 1 Parsing)
+            for (let trk = 0; trk < numTracks; trk++) {
+                
+                // Scan forward to locate the next 'MTrk' chunk header
+                while (offset < data.length - 4 && !(data[offset] === 0x4D && data[offset+1] === 0x54 && data[offset+2] === 0x72 && data[offset+3] === 0x6B)) {
+                    offset++;
+                }
+                
+                if (offset >= data.length - 4) break; // Reached End of File
+                
+                offset += 4; // Step past MTrk
+                let trackLen = (data[offset]<<24) | (data[offset+1]<<16) | (data[offset+2]<<8) | data[offset+3];
+                offset += 4;
+                
+                let trackEnd = offset + trackLen;
+                let runningStatus = 0;
+                let current_abs_ms = 0;
+                let mpqn = Math.floor(60000000 / importBpm); // Assume default PPQ speed initially
+                
+                while (offset < trackEnd) {
+                    let vlq = parseVLQ(data, offset);
+                    offset = vlq.offset;
+                    
+                    // Increment Absolute Timing based on exact local tempo at this tick
+                    current_abs_ms += (vlq.val * (mpqn / ppq)) / 1000;
+                    
+                    let eventTypeByte = data[offset];
+                    
+                    if (eventTypeByte === 0xFF) { // Meta Event Block
+                        offset++;
+                        let metaType = data[offset++];
+                        let metaLenVLQ = parseVLQ(data, offset);
+                        let metaLen = metaLenVLQ.val;
+                        offset = metaLenVLQ.offset;
+                        
+                        // Extract Set Tempo (0x51) Event
+                        if (metaType === 0x51 && metaLen === 3) {
+                            mpqn = (data[offset]<<16) | (data[offset+1]<<8) | data[offset+2];
+                            importBpm = Math.round(60000000 / mpqn);
+                            
+                            // Propagate main tempo to UI on track 0 mapping
+                            if (trk === 0) {
+                                document.getElementById('bpm-slider').value = importBpm;
+                                let bpmLabel = document.getElementById('bpm-val');
+                                if (bpmLabel) bpmLabel.textContent = importBpm;
+                                bpm = importBpm; // Update the internal core variable safely
+                            }
+                        }
+                        offset += metaLen; // Skip over the rest of the meta event string
+                        
+                    } else if (eventTypeByte === 0xF0 || eventTypeByte === 0xF7) { // Sysex Event Block
+                        offset++;
+                        let sysexLenVLQ = parseVLQ(data, offset);
+                        offset = sysexLenVLQ.offset + sysexLenVLQ.val;
+                    } else {
+                        // MIDI Event (Channel/Voice Message)
+                        if (eventTypeByte >= 0x80) { // Set running status
+                            runningStatus = eventTypeByte;
+                            offset++;
+                        }
+                        
+                        let statusType = runningStatus & 0xF0;
+                        
+                        if (statusType === 0x90 || statusType === 0x80) {
+                            let note = data[offset++];
+                            let vel = data[offset++];
+                            
+                            // Only capture active NOTE_ON signals (Ignore 0x80 note-offs or 0 velocity NOTE_ON)
+                            if (statusType === 0x90 && vel > 0) {
+                                let basePitch = note - (curOct * 12) - curTrans; // Un-bake against current UI
+                                newEvents.push({ time: current_abs_ms, type: "NOTE_ON", data: { basePitch: basePitch } });
+                            }
+                        } else if (statusType === 0xC0 || statusType === 0xD0) {
+                            offset += 1; // Program Change / Channel Pressure lengths
+                        } else if (statusType === 0xA0 || statusType === 0xB0 || statusType === 0xE0) {
+                            offset += 2; // Poly Pressure / Control Change / Pitch Bend lengths
+                        }
+                    }
+                }
+            }
+            
+            // Post-Processing multi-track merging
+            if (newEvents.length > 0) {
+                // Sorting guarantees multi-track timeline integrity 
+                newEvents.sort((a, b) => a.time - b.time);
+                performanceEvents = newEvents;
+                alert("MIDI successfully loaded! Press PLAY to hear it.");
+            } else {
+                alert("No readable notes found in MIDI file.");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+        e.target.value = ''; // Clean the input so consecutive identical file loads trigger cleanly
+    }
+
+    // 1. THE CORE MIDI PARSER
+// This contains your exact logic, but now it accepts raw data directly
+// so both Android and Desktop can use it.
+function parseMidiBuffer(arrayBuffer) {
+    const data = new Uint8Array(arrayBuffer);
+
+    // Check strictly for standard MThd bytes and safe minimum length
+    if (data.length < 14 || data[0] !== 0x4D || data[1] !== 0x54 || data[2] !== 0x68 || data[3] !== 0x64) {
+        return alert("Invalid MIDI file header format.");
+    }
+
+    // Format (2 bytes), Tracks (2 bytes), PPQ (2 bytes)
+    let format = (data[8] << 8) | data[9];
+    let numTracks = (data[10] << 8) | data[11];
+    let ppq = (data[12] << 8) | data[13];
+    let offset = 14;
+
+    let newEvents = [];
+    let importBpm = parseInt(document.getElementById('bpm-slider').value, 10) || 120;
+
+    // Live un-baking base slider values
+    let curOct = parseInt(document.getElementById('octave-shift').value, 10);
+    let curTrans = parseInt(document.getElementById('transpose').value, 10);
+
+    // Read through ALL tracks (Safe Multi-track Type 1 Parsing)
+    for (let trk = 0; trk < numTracks; trk++) {
+
+        // Scan forward to locate the next 'MTrk' chunk header
+        while (offset < data.length - 4 && !(data[offset] === 0x4D && data[offset+1] === 0x54 && data[offset+2] === 0x72 && data[offset+3] === 0x6B)) {
+            offset++;
+        }
+
+        if (offset >= data.length - 4) break; // Reached End of File
+
+        offset += 4; // Step past MTrk
+        let trackLen = (data[offset]<<24) | (data[offset+1]<<16) | (data[offset+2]<<8) | data[offset+3];
+        offset += 4;
+
+        let trackEnd = offset + trackLen;
+        let runningStatus = 0;
+        let current_abs_ms = 0;
+        let mpqn = Math.floor(60000000 / importBpm); // Assume default PPQ speed initially
+
+        while (offset < trackEnd) {
+            let vlq = parseVLQ(data, offset);
+            offset = vlq.offset;
+
+            // Increment Absolute Timing based on exact local tempo at this tick
+            current_abs_ms += (vlq.val * (mpqn / ppq)) / 1000;
+
+            let eventTypeByte = data[offset];
+
+            if (eventTypeByte === 0xFF) { // Meta Event Block
+                offset++;
+                let metaType = data[offset++];
+                let metaLenVLQ = parseVLQ(data, offset);
+                let metaLen = metaLenVLQ.val;
+                offset = metaLenVLQ.offset;
+
+                // Extract Set Tempo (0x51) Event
+                if (metaType === 0x51 && metaLen === 3) {
+                    mpqn = (data[offset]<<16) | (data[offset+1]<<8) | data[offset+2];
+                    importBpm = Math.round(60000000 / mpqn);
+
+                    // Propagate main tempo to UI on track 0 mapping
+                    if (trk === 0) {
+                        document.getElementById('bpm-slider').value = importBpm;
+                        let bpmLabel = document.getElementById('bpm-val');
+                        if (bpmLabel) bpmLabel.textContent = importBpm;
+                        bpm = importBpm; // Update the internal core variable safely
+                    }
+                }
+                offset += metaLen; // Skip over the rest of the meta event string
+
+            } else if (eventTypeByte === 0xF0 || eventTypeByte === 0xF7) { // Sysex Event Block
+                offset++;
+                let sysexLenVLQ = parseVLQ(data, offset);
+                offset = sysexLenVLQ.offset + sysexLenVLQ.val;
+            } else {
+                // MIDI Event (Channel/Voice Message)
+                if (eventTypeByte >= 0x80) { // Set running status
+                    runningStatus = eventTypeByte;
+                    offset++;
+                }
+
+                let statusType = runningStatus & 0xF0;
+
+                if (statusType === 0x90 || statusType === 0x80) {
+                    let note = data[offset++];
+                    let vel = data[offset++];
+
+                    // Only capture active NOTE_ON signals (Ignore 0x80 note-offs or 0 velocity NOTE_ON)
+                    if (statusType === 0x90 && vel > 0) {
+                        let basePitch = note - (curOct * 12) - curTrans; // Un-bake against current UI
+                        newEvents.push({ time: current_abs_ms, type: "NOTE_ON", data: { basePitch: basePitch } });
+                    }
+                } else if (statusType === 0xC0 || statusType === 0xD0) {
+                    offset += 1; // Program Change / Channel Pressure lengths
+                } else if (statusType === 0xA0 || statusType === 0xB0 || statusType === 0xE0) {
+                    offset += 2; // Poly Pressure / Control Change / Pitch Bend lengths
+                }
+            }
+        }
+    }
+
+    // Post-Processing multi-track merging
+    if (newEvents.length > 0) {
+        // Sorting guarantees multi-track timeline integrity
+        newEvents.sort((a, b) => a.time - b.time);
+        performanceEvents = newEvents;
+        alert("MIDI successfully loaded! Press PLAY to hear it.");
+    } else {
+        alert("No readable notes found in MIDI file.");
+    }
+}
+
+    function stopPerformancePlayback() {
+        performanceState = "IDLE";
+        document.getElementById('btn-perf-play').style.background = '#333';
+        document.getElementById('btn-perf-play').style.color = '#4ecdc4';
+    }
+
+    function playbackLoop() {
+        if (performanceState !== "PLAYING") return;
+
+        let currentTime = performance.now() - playbackStartTime;
+        let lookahead = 30; // Pre-schedule ms window
+
+        while (playbackIndex < performanceEvents.length && performanceEvents[playbackIndex].time <= currentTime + lookahead) {
+            let ev = performanceEvents[playbackIndex];
+            let scheduleTime = playbackStartTime + ev.time;
+            let delay = Math.max(0, scheduleTime - performance.now());
+
+            setTimeout(() => {
+                executePerformanceEvent(ev);
+            }, delay);
+
+            playbackIndex++;
+        }
+
+        if (playbackIndex < performanceEvents.length) {
+            requestAnimationFrame(playbackLoop);
+        } else {
+            setTimeout(() => {
+                if (performanceState === "PLAYING" && playbackIndex >= performanceEvents.length) {
+                    stopPerformancePlayback();
+                }
+            }, lookahead + 100);
+        }
+    }
+
+    function executePerformanceEvent(ev) {
+        if (performanceState !== "PLAYING") return;
+
+        if (ev.type === "NOTE_ON") {
+            const shift = parseInt(document.getElementById('octave-shift').value, 10) * 12 + parseInt(document.getElementById('transpose').value, 10);
+            let actualPitch = ev.data.basePitch + shift;
+            actualPitch = Math.max(0, Math.min(127, actualPitch));
+            
+            playNote(actualPitch);
+            midiNoteOn(actualPitch);
+
+        } else if (ev.type === "OCTAVE") {
+            document.getElementById('octave-shift').value = ev.data.val;
+            updatePatchString();
+        } else if (ev.type === "TRANSPOSE") {
+            document.getElementById('transpose').value = ev.data.val;
+            document.getElementById('transpose-val').textContent = ev.data.val > 0 ? '+' + ev.data.val : ev.data.val;
+            updatePatchString();
+        } else if (ev.type === "SUSTAIN") {
+            document.getElementById('sustain').value = ev.data.val;
+            updatePatchString();
+        } else if (ev.type === "NOTEOFF") {
+            document.getElementById('noteoff-delay').value = ev.data.val;
+            updatePatchString();
+        }
+    }
+
+    // ─── MIDI Bridge & Web MIDI Unified Driver ────────────────────────
+    const androidBridge = window.AndroidMidiBridge || null;
+    const iosBridge = window.iOSMidiBridge || null;
+    const nativeBridge = androidBridge || iosBridge || null;
+    let webMidiAccess = null;
+    let nativeMidiOutputs = new Map();
+
+    const indicator = document.getElementById('midi-indicator');
+    const midiSel   = document.getElementById('midi-output-select');
+
+    function setMidiStatus(state) { if (indicator) indicator.className = state; }
+
+    const unifiedMidiOutput = {
+        send(bytes) {
+		    if (!midiSel || midiSel.value === 'none') return;
+            if (nativeBridge) {
+                nativeBridge.sendMidi(bytes[0], bytes[1] || 0, bytes[2] || 0);
+            } else if (webMidiAccess) {
+                const targetId = midiSel.value;
+                const nativePort = nativeMidiOutputs.get(targetId);
+                if (nativePort) {
+                    nativePort.send(bytes);
+                }
+            }
+        }
+    };
+
+    window.onMidiDevicesUpdated = function(deviceListJson) {
+        if (!nativeBridge) return;
+        let devices;
+        try {
+            devices = JSON.parse(deviceListJson);
+        } catch (e) {
+            console.error('Bad MIDI device list from native bridge:', e);
+            return;
+        }
+        if (!midiSel) return;
+        
+        // 1. SAVE CURRENT SELECTION BEFORE CLEARING HTML
+        const previousSelection = midiSel.value; 
+        
+        midiSel.innerHTML = '<option value="none">None</option>';
+        
+        if (devices.length === 0) {
+            const opt = document.createElement('option');
+            opt.textContent = '(no outputs)';
+            midiSel.appendChild(opt);
+            setMidiStatus('error');
+            return;
+        }
+        
+        devices.forEach(dev => {
+            const opt = document.createElement('option');
+            opt.value = dev.id; opt.textContent = dev.name;
+            midiSel.appendChild(opt);
+        });
+        
+        // 2. RESTORE THE SELECTION
+        // If the previous selection was 'none' or is still a valid plugged-in device, keep it
+        if (previousSelection === 'none' || devices.some(d => String(d.id) === previousSelection)) {
+            midiSel.value = previousSelection;
+        } else {
+            midiSel.value = 'none'; // Default to none if the device was unplugged
+        }
+        
+        if (midiSel.value !== 'none') nativeBridge.selectDevice(parseInt(midiSel.value));
+        setMidiStatus(midiSel.value !== 'none' ? 'connected' : '');
+    };
+
+    function initWebMidiAPI() {
+        if (!navigator.requestMIDIAccess) {
+            if (!nativeBridge) setMidiStatus('error');
+            return;
+        }
+        navigator.requestMIDIAccess().then(access => {
+            webMidiAccess = access;
+            syncWebMidiOutputs();
+            access.onstatechange = syncWebMidiOutputs;
+        }).catch(err => {
+            console.warn("Web MIDI access denied or unavailable:", err);
+            if (!nativeBridge) setMidiStatus('error');
+        });
+    }
+
+    function syncWebMidiOutputs() {
+        if (nativeBridge || !webMidiAccess) return;
+        
+        // 1. SAVE CURRENT SELECTION BEFORE CLEARING HTML
+        const previousSelection = midiSel.value;
+        
+        midiSel.innerHTML = '<option value="none">None</option>';
+        nativeMidiOutputs.clear();
+        
+        const outputs = webMidiAccess.outputs;
+        if (outputs.size === 0) {
+            const opt = document.createElement('option');
+            opt.textContent = '(no outputs)';
+            midiSel.appendChild(opt);
+            setMidiStatus('error');
+            return;
+        }
+
+        outputs.forEach(port => {
+            nativeMidiOutputs.set(port.id, port);
+            const opt = document.createElement('option');
+            opt.value = port.id;
+            opt.textContent = port.name || `MIDI Output (${port.id})`;
+            midiSel.appendChild(opt);
+        });
+
+        // 2. RESTORE THE SELECTION
+        if (previousSelection === 'none' || nativeMidiOutputs.has(previousSelection)) {
+            midiSel.value = previousSelection;
+        } else {
+            midiSel.value = 'none'; 
+        }
+
+        setMidiStatus(midiSel.value !== 'none' ? 'connected' : '');
+    }
+
+    if (midiSel) midiSel.addEventListener('change', () => {
+        //if (nativeBridge) {
+		if (nativeBridge && midiSel.value !== 'none') { // <-- CHANGED: Protects native bridge from NaN
+            nativeBridge.selectDevice(parseInt(midiSel.value));
+        }
+        setMidiStatus(midiSel.value && midiSel.value !== '(no outputs)' ? 'connected' : '');
+    });
+
+    // ─── Audio Context ────────────────────────────────────────────────
+    function createSilentAudioContext() {
+        const noop = () => {};
+        const node = () => ({
+            connect: noop, disconnect: noop, start: noop, stop: noop,
+            frequency: { value: 440, setValueAtTime: noop },
+            gain: { value: 1, setValueAtTime: noop, linearRampToValueAtTime: noop, cancelScheduledValues: noop }
+        });
+        return {
+            resume: () => Promise.resolve(),
+            close: noop,
+            createGain: node,
+            createOscillator: node,
+            createBiquadFilter: node,
+            createDynamicsCompressor: node,
+            createScriptProcessor: () => ({ connect: noop, disconnect: noop, onaudioprocess: null }),
+            currentTime: 0,
+            destination: node(),
+            sampleRate: 44100,
+            state: 'running'
+        };
+    }
+
+    let audioCtx = null;
+    function ensureAudioContext() {
+        if (audioCtx) return audioCtx;
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) throw new Error('WebAudio not supported');
+            try {
+                audioCtx = new Ctx({ sampleRate: 44100, latencyHint: 'interactive' });
+            } catch (e1) {
+                audioCtx = new Ctx();
+            }
+        } catch (e) {
+            console.error('WebAudio init failed:', e);
+            audioCtx = createSilentAudioContext();
+        }
+        return audioCtx;
+    }
+    const noteOffTimers = new Map();
+	
+	const TONE_REGISTRY = [
+    { functionName: 'playNoteSine',  alias: 'Pure Sine' },
+    { functionName: 'playNoteOrig', alias: 'Triangle' },
+	{ functionName: 'playNoteTrem',   alias: 'Trem Tri' },
+	{ functionName: 'playNoteSqTr',   alias: 'Triangle + Sq' },
+    { functionName: 'playNoteSq',   alias: 'Retro Square' },
+	{ functionName: 'playNotePad',   alias: 'Pad' },
+	{ functionName: 'playNoteSineOver',  alias: 'Sine w/ 2 even ots + oct dn bass' }
+];
+	
+	let currentPlayNoteTone = 'playNoteSq';
+	
+	function initToneSelectorUI() {
+    const triggerBtn = document.getElementById('tone-select-trigger');
+    const modalWindow = document.getElementById('tone-modal-window');
+    const modalClose = document.getElementById('tone-modal-close');
+    const dropdown = document.getElementById('tone-dropdown');
+
+    if (!triggerBtn || !modalWindow || !dropdown) return;
+
+    // 3. Dynamically populate the select dropdown using the registry map
+    dropdown.innerHTML = ''; // Clear defaults if any
+    TONE_REGISTRY.forEach(tone => {
+        const option = document.createElement('option');
+        option.value = tone.functionName;
+        option.textContent = tone.alias;
+        dropdown.appendChild(option);
+    });
+
+    // Set dropdown to match the initial global state value
+    dropdown.value = currentPlayNoteTone;
+    updateTriggerButtonLabel();
+
+    // 4. Toggle the visibility of the floating style window
+    triggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isHidden = modalWindow.style.display === 'none';
+        modalWindow.style.display = isHidden ? 'block' : 'none';
+    });
+
+    modalClose.addEventListener('click', () => {
+        modalWindow.style.display = 'none';
+    });
+
+    // Close the window if the user clicks anywhere outside of it
+    document.addEventListener('click', (e) => {
+        if (modalWindow.style.display === 'block' && !modalWindow.contains(e.target) && e.target !== triggerBtn) {
+            modalWindow.style.display = 'none';
+        }
+    });
+
+    // 5. Handle changing selections inside the dropdown
+    dropdown.addEventListener('change', (e) => {
+        currentPlayNoteTone = e.target.value;
+        updateTriggerButtonLabel();
+    });
+	
+	//press 7 and 8 to loop the tone Select
+	document.addEventListener('keydown', (e) => {
+    // Ensure we aren't typing in an input field
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    const dropdown = document.getElementById('tone-dropdown');
+    if (!dropdown) return;
+
+    let currentIndex = dropdown.selectedIndex;
+    const totalOptions = dropdown.options.length;
+
+    if (e.key === '8') {
+        // Select Next (Loop around to 0 if at end)
+        dropdown.selectedIndex = (currentIndex + 1) % totalOptions;
+        dropdown.dispatchEvent(new Event('change')); // Triggers your audio/label update
+    } else if (e.key === '7') {
+        // Select Previous (Loop around to last if at 0)
+        dropdown.selectedIndex = (currentIndex - 1 + totalOptions) % totalOptions;
+        dropdown.dispatchEvent(new Event('change')); // Triggers your audio/label update
+    }
+    });
+
+    // Helper to keep the layout main button displaying the active friendly alias
+    function updateTriggerButtonLabel() {
+        const activeTone = TONE_REGISTRY.find(t => t.functionName === currentPlayNoteTone);
+        if (activeTone) {
+            triggerBtn.textContent = `Tone: ${activeTone.alias}`;
+        } else {
+            triggerBtn.textContent = `Tone: Custom`;
+        }
+    }
+}
+	
+    // ─── MIDI / Audio Engine ──────────────────────────────────────────
+    const MIDI_CH = 0, MIDI_VEL = 100;
+
+    function midiNoteOn(note) {
+        // STATEFUL CAPTURE RECORDING HOOK
+        if (performanceState === "RECORDING") {
+            const shift = parseInt(document.getElementById('octave-shift').value, 10) * 12 + parseInt(document.getElementById('transpose').value, 10);
+            let basePitch = note - shift; // Reverts down to the raw layout grid value
+            recordEvent("NOTE_ON", { basePitch: basePitch });
+        }
+
+        if (noteOffTimers.has(note)) {
+            clearTimeout(noteOffTimers.get(note));
+            noteOffTimers.delete(note);
+            unifiedMidiOutput.send([0x80 | MIDI_CH, note, 0]);
+        }
+        unifiedMidiOutput.send([0x90 | MIDI_CH, note, MIDI_VEL]);
+        indicator.className = 'sending';
+        setTimeout(() => { indicator.className = (midiSel.value && midiSel.value !== '(no outputs)') ? 'connected' : ''; }, 60);
+
+        const delayMs = Math.round(parseFloat(document.getElementById('noteoff-delay').value) * 1000);
+        const tid = setTimeout(() => {
+            unifiedMidiOutput.send([0x80 | MIDI_CH, note, 0]);
+            noteOffTimers.delete(note);
+        }, delayMs);
+        noteOffTimers.set(note, tid);
+    }
+	
+	function playNote(midi) {
+    // 1. Look up the function by its string name in the global scope
+    const targetFunction = window[currentPlayNoteTone];
+    
+    // 2. Safely call it if it exists, otherwise fallback to a known default
+    if (typeof targetFunction === 'function') {
+        targetFunction(midi);
+    } else {
+        // Fallback protection to ensure audio never breaks if an invalid name is passed
+        if (typeof playNoteSq === 'function') {
+            playNoteOrig(midi);
+        }
+    }
+}
+	function playNoteSq(midi) {
+        const osc = audioCtx.createOscillator(), gain = audioCtx.createGain(), filter = audioCtx.createBiquadFilter();
+        const sustain = parseFloat(document.getElementById('sustain').value);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440 * Math.pow(2,(midi-69)/12), audioCtx.currentTime);
+        filter.type = 'lowpass'; filter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + sustain);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+        osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + sustain);
+    }
+
+	function playNoteOrig(midi) {
+        const osc    = audioCtx.createOscillator();
+        const gain   = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        const sustain = parseFloat(document.getElementById('sustain').value);
+		
+		const attackTime = 0.025; 
+        const totalDuration = attackTime + sustain;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440 * Math.pow(2,(midi-69)/12), audioCtx.currentTime);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+         filter.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.15); 
+		 filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + totalDuration);
+
+        gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+		gain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + attackTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+
+        osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + sustain);
+    }
+	
+	function playNoteSqTr(midi) {
+		const oscTri   = audioCtx.createOscillator(); // triangle wave
+		const oscSq    = audioCtx.createOscillator(); // square wave (half gain)
+		const gainTri  = audioCtx.createGain();       // individual gain for triangle
+		const gainSq   = audioCtx.createGain();       // individual gain for square
+		const mixGain  = audioCtx.createGain();       // combined output gain
+		const filter   = audioCtx.createBiquadFilter();
+		const sustain  = parseFloat(document.getElementById('sustain').value);
+
+		const attackTime = 0.025; 
+		const totalDuration = attackTime + sustain;
+
+		// --- Triangle oscillator ---
+		oscTri.type = 'triangle';
+		oscTri.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), audioCtx.currentTime);
+
+		// --- Square oscillator (same pitch) ---
+		oscSq.type = 'square';
+		oscSq.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), audioCtx.currentTime);
+
+		// --- Filter (shared) ---
+		filter.type = 'lowpass';
+		filter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+		filter.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.15); 
+		filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + totalDuration);
+
+		// --- Envelope gains ---
+		const baseLevel = 0.08; // peak amplitude for triangle
+
+		// Triangle gain envelope
+		gainTri.gain.setValueAtTime(0.001, audioCtx.currentTime);
+		gainTri.gain.linearRampToValueAtTime(baseLevel, audioCtx.currentTime + attackTime);
+		gainTri.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+
+		// Square gain envelope at half the triangle's level
+		gainSq.gain.setValueAtTime(0.001, audioCtx.currentTime);
+		gainSq.gain.linearRampToValueAtTime(baseLevel * 0.5, audioCtx.currentTime + attackTime);
+		gainSq.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+
+		// --- Connect graph ---
+		// Both oscillators -> filter -> their own gains -> mix into mixGain -> destination
+		oscTri.connect(filter);
+		oscSq.connect(filter);
+
+		filter.connect(gainTri);
+		filter.connect(gainSq);
+
+		gainTri.connect(mixGain);
+		gainSq.connect(mixGain);
+
+		mixGain.connect(audioCtx.destination);
+
+		// --- Start/stop ---
+		const now = audioCtx.currentTime;
+		oscTri.start(now);
+		oscSq.start(now);
+
+		oscTri.stop(now + totalDuration);
+		oscSq.stop(now + totalDuration);
+	}
+	
+	function playNotePad(midi) {
+    const oscTri   = audioCtx.createOscillator(); // triangle
+    const oscSq    = audioCtx.createOscillator(); // square (detuned)
+    const gainTri  = audioCtx.createGain();
+    const gainSq   = audioCtx.createGain();
+    const mixGain  = audioCtx.createGain();
+    const filter   = audioCtx.createBiquadFilter();
+    const sustain  = parseFloat(document.getElementById('sustain').value);
+
+    // Ethereal pad timings
+    const attackTime = 0.10;          // slow attack
+    const totalDuration = attackTime + sustain;
+
+    // --- Oscillators ---
+    oscTri.type = 'triangle';
+    oscTri.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), audioCtx.currentTime);
+
+    oscSq.type = 'square';
+    oscSq.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), audioCtx.currentTime);
+    oscSq.detune.value = 6; // slight detune for width
+
+    // --- Filter: gentle, slow movement ---
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(900, audioCtx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(350, audioCtx.currentTime + totalDuration * 0.9);
+    filter.Q.value = 0.7;
+
+    // --- Envelopes ---
+    const baseLevel = 0.06; // keep it soft for layering
+
+    // Triangle envelope
+    gainTri.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gainTri.gain.linearRampToValueAtTime(baseLevel, audioCtx.currentTime + attackTime);
+    gainTri.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+
+    // Square envelope (slightly lower, for air not harshness)
+    gainSq.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gainSq.gain.linearRampToValueAtTime(baseLevel * 0.45, audioCtx.currentTime + attackTime);
+    gainSq.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+
+    // --- Connect graph ---
+    oscTri.connect(filter);
+    oscSq.connect(filter);
+
+    filter.connect(gainTri);
+    filter.connect(gainSq);
+
+    gainTri.connect(mixGain);
+    gainSq.connect(mixGain);
+
+    mixGain.connect(audioCtx.destination);
+
+    // --- Start/stop ---
+	const now = audioCtx.currentTime;
+
+    oscTri.start(now);
+    oscSq.start(now);
+
+    oscTri.stop(now + totalDuration);
+    oscSq.stop(now + totalDuration);
+}
+
+function playNoteSineOver(midi) {
+    // Fundamental + 3 even harmonics (2nd, 4th, 6th)
+    const osc1   = audioCtx.createOscillator(); // fundamental (1f)
+    const osc2   = audioCtx.createOscillator(); // 2nd harmonic (2f)
+    const osc3   = audioCtx.createOscillator(); // 4th harmonic (4f)
+    const osc4   = audioCtx.createOscillator(); // 6th harmonic (6f)
+
+    const gain1  = audioCtx.createGain();
+    const gain2  = audioCtx.createGain();
+    const gain3  = audioCtx.createGain();
+    const gain4  = audioCtx.createGain();
+
+    const mixGain = audioCtx.createGain();
+    const filter  = audioCtx.createBiquadFilter();
+    const sustain = parseFloat(document.getElementById('sustain').value);
+
+    const attackTime = 0.025;
+    const totalDuration = attackTime + sustain;
+
+    // Fundamental frequency
+    const f0 = 440 * Math.pow(2, (midi - 69) / 12);
+
+    // --- Oscillators ---
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(f0, audioCtx.currentTime);
+
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(f0 * 2, audioCtx.currentTime); // 2nd harmonic
+
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(f0 * 4, audioCtx.currentTime); // 4th harmonic
+
+    osc4.type = 'sine';
+    osc4.frequency.setValueAtTime(f0 * 0.5, audioCtx.currentTime); // 6th harmonic
+
+    // --- Filter (shared) ---
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.15);
+    filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + totalDuration);
+
+    // --- Envelopes ---
+    const baseLevel = 0.05;
+
+		// Fundamental (1f)
+	gain1.gain.setValueAtTime(0.001, audioCtx.currentTime);
+	gain1.gain.linearRampToValueAtTime(baseLevel, audioCtx.currentTime + attackTime);
+	gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + attackTime + sustain);
+
+	// 2nd harmonic (2f) – 50% of fundamental
+	gain2.gain.setValueAtTime(0.001, audioCtx.currentTime);
+	gain2.gain.linearRampToValueAtTime(baseLevel * 0.5, audioCtx.currentTime + attackTime);
+	gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + attackTime + sustain);
+
+	// 4th harmonic (4f) – 25% of fundamental
+	gain3.gain.setValueAtTime(0.001, audioCtx.currentTime);
+	gain3.gain.linearRampToValueAtTime(baseLevel * 0.25, audioCtx.currentTime + attackTime);
+	gain3.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + attackTime + sustain);
+
+	// 6th harmonic (6f) – 12.5% of fundamental
+	gain4.gain.setValueAtTime(0.001, audioCtx.currentTime);
+	gain4.gain.linearRampToValueAtTime(baseLevel, audioCtx.currentTime + attackTime);
+	gain4.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + attackTime + sustain);
+
+    // --- Connect graph ---
+    osc1.connect(filter);
+    osc2.connect(filter);
+    osc3.connect(filter);
+    osc4.connect(filter);
+
+    filter.connect(gain1);
+    filter.connect(gain2);
+    filter.connect(gain3);
+    filter.connect(gain4);
+
+    gain1.connect(mixGain);
+    gain2.connect(mixGain);
+    gain3.connect(mixGain);
+    gain4.connect(mixGain);
+
+    mixGain.connect(audioCtx.destination);
+
+    // --- Start/stop ---
+    const now = audioCtx.currentTime;
+    osc1.start(now);
+    osc2.start(now);
+    osc3.start(now);
+    osc4.start(now);
+
+    osc1.stop(now + totalDuration);
+    osc2.stop(now + totalDuration);
+    osc3.stop(now + totalDuration);
+    osc4.stop(now + totalDuration);
+}
+	
+	function playNoteTrem(midi) {
+		const osc    = audioCtx.createOscillator();
+		const gain   = audioCtx.createGain();
+		const filter = audioCtx.createBiquadFilter();
+		const sustain = parseFloat(document.getElementById('sustain').value);
+
+		// Calculate note timing from BPM
+		const bpm = parseFloat(document.getElementById('bpm-slider').value);
+		const beatDuration = 60 / bpm;          // quarter note in seconds
+		const eighthNoteDuration = beatDuration / 2;
+		const lfoFrequency = 1 / eighthNoteDuration; // 1/8th note rate in Hz
+
+		const attackTime = 0.025; 
+		const totalDuration = attackTime + sustain;
+
+		// --- Main oscillator ---
+		osc.type = 'triangle';
+		osc.frequency.setValueAtTime(440 * Math.pow(2, (midi - 69) / 12), audioCtx.currentTime);
+
+		// --- Filter ---
+		filter.type = 'lowpass';
+		filter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+		filter.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.15); 
+		filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + totalDuration);
+
+		// --- Envelope gain (overall amplitude) ---
+		gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+		gain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + attackTime);
+		gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+
+		// --- Tremolo LFO ---
+		const lfo = audioCtx.createOscillator();
+		const lfoGain = audioCtx.createGain();
+
+		lfo.type = 'sine'; // smooth tremolo
+		lfo.frequency.setValueAtTime(lfoFrequency, audioCtx.currentTime);
+
+		// Tremolo depth: how much the LFO modulates the gain (0–1 range)
+		const tremoloDepth = 0.5; // 0 = no tremolo, 1 = full on/off
+		lfoGain.gain.value = tremoloDepth * 0.1; // scale relative to your main gain level
+
+		// LFO output will oscillate around 0, so we add it to the envelope gain
+		// by connecting into gain.gain via AudioParam
+		lfo.connect(lfoGain);
+		lfoGain.connect(gain.gain);
+
+		// --- Connect graph ---
+		osc.connect(filter);
+		filter.connect(gain);
+		gain.connect(audioCtx.destination);
+
+		// --- Start/stop ---
+		const now = audioCtx.currentTime;
+		osc.start(now);
+		osc.stop(now + totalDuration);
+
+		lfo.start(now);
+		lfo.stop(now + totalDuration);
+	}
+		
+	
+	function playNoteSine(midi) {
+        const osc    = audioCtx.createOscillator();
+        const gain   = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        const sustain = parseFloat(document.getElementById('sustain').value);
+		
+		const attackTime = 0.025;
+        const totalDuration = attackTime + sustain;
+        osc.type = 'sin';
+        osc.frequency.setValueAtTime(440 * Math.pow(2,(midi-69)/12), audioCtx.currentTime);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+        //filter.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + sustain);
+        filter.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.25);
+		filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + totalDuration);
+
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+		gain.gain.linearRampToValueAtTime(0.1, audioCtx.currentTime + attackTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + sustain);
+
+        osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + sustain);
+    }
+	
+	function exportSongSequenceToQuantizedMidi() {
+    // 1. Gather all block elements sequentially from your block matrix timeline container
+    const blocks = document.querySelectorAll('.sequence-block');
+    if (blocks.length === 0) return alert("The block matrix is empty. Create some sequence blocks with 'SEQW' first.");
+
+    const PPQ = 480; // Standard Pulses Per Quarter note definition
+    const exportBpm = parseInt(document.getElementById('bpm-slider').value, 10) || 120;
+    
+    let trackData = [];
+    
+    // 2. Insert absolute Tempo Meta Event (0xFF 0x51) at the track origin
+    let mpqn = Math.floor(60000000 / exportBpm);
+    trackData.push(0x00, 0xFF, 0x51, 0x03, (mpqn >> 16) & 0xFF, (mpqn >> 8) & 0xFF, mpqn & 0xFF);
+
+    let absoluteTicksTimeline = 0;
+    let rawDeltaEvents = [];
+
+    // 3. Read step data blocks sequentially
+    blocks.forEach(block => {
+        const rawText = block.dataset.sequence || "";
+        const tokens = rawText.split(',').map(s => s.trim().toLowerCase()).filter(s => s !== '');
+
+        tokens.forEach(token => {
+            // Determine exact quantized tick duration length from token suffixes
+            let ticksDuration = PPQ / 4; // Default 16th note = 120 ticks
+            if (token.endsWith('--'))      ticksDuration = (PPQ / 4) * 3; // Dotted 8th = 360 ticks
+            else if (token.endsWith('-'))  ticksDuration = (PPQ / 4) * 2; // 8th note = 240 ticks
+            else if (token.endsWith('#'))  ticksDuration = Math.round((PPQ / 3)); // Triplet 8th = 160 ticks
+
+            // Isolate base pitch integer
+            const cleanStr = token.replace(/--|-|#/g, '');
+            const parsedMidi = parseInt(cleanStr, 10);
+
+            if (!isNaN(parsedMidi) && parsedMidi >= 0 && parsedMidi <= 127) {
+                // Apply global baseline transposition offsets explicitly onto the exported bytes
+                const shift = (parseInt(document.getElementById('octave-shift').value, 10) * 12) + 
+                              parseInt(document.getElementById('transpose').value, 10);
+                const absolutePitch = Math.max(0, Math.min(127, parsedMidi + shift));
+
+                // Push absolute time event triggers
+                rawDeltaEvents.push({ absTick: absoluteTicksTimeline, type: 0x90, pitch: absolutePitch }); // NOTE ON
+                rawDeltaEvents.push({ absTick: absoluteTicksTimeline + ticksDuration, type: 0x80, pitch: absolutePitch }); // NOTE OFF
+            }
+
+            // Lock timeline grid increment
+            absoluteTicksTimeline += ticksDuration;
+        });
+    });
+
+    // 4. Sort compiled events to interleave overlapping note-ons and note-offs correctly
+    rawDeltaEvents.sort((a, b) => {
+        if (a.absTick === b.absTick) {
+            return a.type - b.type; // Process Note Offs (0x80) before Note Ons (0x90) on shared alignment limits
+        }
+        return a.absTick - b.absTick;
+    });
+
+    // 5. Convert absolute timeline locations to running variable-length quantity deltas
+    let currentLastTicks = 0;
+    rawDeltaEvents.forEach(ev => {
+        let delta = ev.absTick - currentLastTicks;
+        currentLastTicks = ev.absTick;
+
+        trackData.push(...toVLQ(delta)); // Uses your file's existing toVLQ utility
+        trackData.push(ev.type); // Enforces Channel 0 mapping limits
+        trackData.push(ev.pitch);
+        trackData.push(ev.type === 0x90 ? 100 : 0); // Velocity scaling rule mapping
+    });
+
+    // 6. Track End signature meta byte injection
+    trackData.push(0x00, 0xFF, 0x2F, 0x00);
+
+    // 7. Structure standard Type-0 binary MIDI file wraps
+    let header = [
+        0x4D, 0x54, 0x68, 0x64, // MThd
+        0x00, 0x00, 0x00, 0x06, // Header length = 6 bytes
+        0x00, 0x00,             // Format type = 0 (Single Track)
+        0x00, 0x01,             // Track counts = 1
+        (PPQ >> 8) & 0xFF, PPQ & 0xFF // Resolution time division values
+    ];
+
+    let trackHeader = [
+        0x4D, 0x54, 0x72, 0x6B, // MTrk
+        (trackData.length >> 24) & 0xFF,
+        (trackData.length >> 16) & 0xFF,
+        (trackData.length >> 8) & 0xFF,
+        trackData.length & 0xFF
+    ];
+
+    // 8. Trigger physical browser dynamic download pipeline
+    let midiArray = new Uint8Array([...header, ...trackHeader, ...trackData]);
+    let filename = `Omnichord_Grid_Sequence_${exportBpm}BPM.mid`;
+
+    if (window.AndroidMidiBridge && typeof window.AndroidMidiBridge.exportFile === 'function') {
+        // Route to Android Native Share/Save
+        window.AndroidMidiBridge.exportFile(uint8ToBase64(midiArray), filename);
+    } else if (window.iOSMidiBridge && typeof window.iOSMidiBridge.exportFile === 'function') {
+        // Route to iOS Native Share Sheet
+        window.iOSMidiBridge.exportFile(uint8ToBase64(midiArray), filename);
+    } else {
+        // Standard Desktop Browser Blob Download
+        let blob = new Blob([midiArray], { type: "audio/midi" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+}
+
+
+    // ─── XY PAD Controller System ─────────────────────────────────────
+    let xyPadActive = false;
+    let xyCols = 12;
+    let xyRows = 5;
+    let xyScaleRootMidi = 60; // C4 Base Anchor
+    let xyScaleOffsets = [0, 2, 3, 5, 7, 8, 11]; // Defaults to Harmonic Minor
+    let xyCellData = [];
+    let xySelectedCell = null;
+    let xySelMode = false;
+    let xyIsDragging = false;
+    let xyLastCell = null;
+
+    function populateScaleDropdown() {
+        const scaleSelect = document.getElementById('xy-scale-select');
+        let currentOptGroup = null;
+
+        rawScaleData.split('\n').forEach(line => {
+            line = line.trim();
+            if (!line) return;
+            
+            if (line.startsWith('=^=')) {
+                currentOptGroup = document.createElement('optgroup');
+                currentOptGroup.label = line.replace('=^=', '').trim();
+                scaleSelect.appendChild(currentOptGroup);
+            } else if (line.includes('=~=')) {
+                const parts = line.split('=~=');
+                const name = parts[0].trim();
+                const notesStr = parts[1].trim();
+                
+                const option = document.createElement('option');
+                option.value = notesStr;
+                option.textContent = name;
+                
+                if (name === "Harmonic Minor") option.selected = true;
+                
+                if (currentOptGroup) currentOptGroup.appendChild(option);
+                else scaleSelect.appendChild(option);
+            }
+        });
+
+        scaleSelect.addEventListener('change', (e) => {
+            applyScaleToXYPad(e.target.value);
+        });
+    }
+
+    function applyScaleToXYPad(notesStr) {
+        const noteTokens = notesStr.split(/\s+/);
+        const offsets = [];
+        
+        noteTokens.forEach((token, index) => {
+            if (xyNoteToOffset[token] !== undefined) {
+                let offset = xyNoteToOffset[token];
+                // Ignore duplicate terminal octave root representation dynamically
+                if (index > 0 && offset === 0 && token === 'C') return;
+                offsets.push(offset);
+            }
+        });
+        
+        if(offsets.length > 0) xyScaleOffsets = offsets;
+        xyCellData = []; // Clear manual overrides when base scale resets
+        buildXYPad();
+    }
+
+    function initXYPad() {
+        const toggleBtn = document.getElementById('btn-xypad-toggle');
+        const xSlider = document.getElementById('xy-x-slider');
+        const ySlider = document.getElementById('xy-y-slider');
+        const xVal = document.getElementById('xy-x-val');
+        const yVal = document.getElementById('xy-y-val');
+        const selBtn = document.getElementById('btn-xy-sel');
+        const supBtn = document.getElementById('btn-xy-sup');
+        const sdnBtn = document.getElementById('btn-xy-sdn');
+        const container = document.getElementById('xy-pad-container');
+
+        populateScaleDropdown();
+
+        toggleBtn.addEventListener('click', () => {
+            xyPadActive = !xyPadActive;
+            toggleBtn.style.background = xyPadActive ? 'var(--active-glow)' : '#333';
+            toggleBtn.style.color = xyPadActive ? '#000' : 'var(--active-glow)';
+            buildXYPad();
+        });
+
+        xSlider.addEventListener('input', (e) => {
+            xyCols = parseInt(e.target.value, 10);
+            xVal.textContent = xyCols;
+            xyCellData = []; 
+            buildXYPad();
+        });
+
+        ySlider.addEventListener('input', (e) => {
+            xyRows = parseInt(e.target.value, 10);
+            yVal.textContent = xyRows;
+            xyCellData = []; 
+            buildXYPad();
+        });
+
+        selBtn.addEventListener('click', () => {
+            xySelMode = !xySelMode;
+            selBtn.style.background = xySelMode ? 'var(--seq-color)' : '#333';
+            selBtn.style.color = xySelMode ? '#000' : '#ccc';
+            if (!xySelMode && xySelectedCell) {
+                xySelectedCell.classList.remove('selected');
+                xySelectedCell = null;
+            }
+        });
+
+        supBtn.addEventListener('click', () => {
+            if (xySelectedCell) {
+                const r = parseInt(xySelectedCell.dataset.r);
+                const c = parseInt(xySelectedCell.dataset.c);
+                xyCellData[r][c] = Math.min(127, xyCellData[r][c] + 1);
+                xySelectedCell.innerHTML = `<span>${xyCellData[r][c]}</span>`;
+            }
+        });
+
+        sdnBtn.addEventListener('click', () => {
+            if (xySelectedCell) {
+                const r = parseInt(xySelectedCell.dataset.r);
+                const c = parseInt(xySelectedCell.dataset.c);
+                xyCellData[r][c] = Math.max(0, xyCellData[r][c] - 1);
+                xySelectedCell.innerHTML = `<span>${xyCellData[r][c]}</span>`;
+            }
+        });
+
+        // Pointer event tracking for rapid XY movement triggering
+        container.addEventListener('pointerdown', e => {
+            container.setPointerCapture(e.pointerId);
+            xyIsDragging = true;
+            xyLastCell = null;
+            handleXYMove(e);
+        });
+        
+        container.addEventListener('pointermove', handleXYMove);
+        
+        const stopXYDrag = () => { xyIsDragging = false; xyLastCell = null; };
+        container.addEventListener('pointerup', stopXYDrag);
+        container.addEventListener('pointercancel', stopXYDrag);
+        container.addEventListener('pointerleave', stopXYDrag);
+    }
+
+    function handleXYMove(e) {
+        if (!xyPadActive) return;
+        if (e.type !== 'pointerdown' && !xyIsDragging) return;
+        
+        const container = document.getElementById('xy-pad-container');
+        const rect = container.getBoundingClientRect();
+        
+        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+            xyLastCell = null;
+            return;
+        }
+
+        const colWidth = rect.width / xyCols;
+        const rowHeight = rect.height / xyRows;
+
+        const c = Math.floor((e.clientX - rect.left) / colWidth);
+        const r = Math.floor((e.clientY - rect.top) / rowHeight);
+
+        const clampedC = Math.max(0, Math.min(xyCols - 1, c));
+        const clampedR = Math.max(0, Math.min(xyRows - 1, r));
+
+        const cellKey = `${clampedR}-${clampedC}`;
+        if (cellKey !== xyLastCell) {
+            triggerXYCell(clampedR, clampedC);
+            xyLastCell = cellKey;
+        }
+    }
+
+    function triggerXYCell(r, c) {
+        const container = document.getElementById('xy-pad-container');
+        const cell = container.children[r * xyCols + c];
+
+        if (xySelMode) {
+            if (xySelectedCell) xySelectedCell.classList.remove('selected');
+            if (cell) {
+                cell.classList.add('selected');
+                xySelectedCell = cell;
+            }
+            return;
+        }
+
+        const rawMidi = xyCellData[r][c];
+        if (rawMidi === undefined) return;
+
+        const shift = parseInt(document.getElementById('octave-shift').value, 10) * 12 + parseInt(document.getElementById('transpose').value, 10);
+        const finalMidi = Math.max(0, Math.min(127, rawMidi + shift));
+
+        playNote(finalMidi);
+        midiNoteOn(finalMidi);
+
+        if (cell) {
+            cell.style.transition = 'none';
+            cell.style.background = 'rgba(78, 205, 196, 0.8)';
+            requestAnimationFrame(() => {
+                cell.style.transition = 'background 0.3s ease-out';
+                cell.style.background = ''; // Reverts to CSS class default
+            });
+        }
+    }
+
+    function buildXYPad() {
+        const container = document.getElementById('xy-pad-container');
+        container.innerHTML = '';
+        
+        if (!xyPadActive) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'grid';
+        container.style.gridTemplateColumns = `repeat(${xyCols}, 1fr)`;
+        container.style.gridTemplateRows = `repeat(${xyRows}, 1fr)`;
+
+        let newData = [];
+        for (let r = 0; r < xyRows; r++) {
+            newData[r] = [];
+            for (let c = 0; c < xyCols; c++) {
+                
+                // Calculate note via scale offset and mapped octave jumps
+                const octs = Math.floor(c / xyScaleOffsets.length);
+                const scaleIdx = c % xyScaleOffsets.length;
+                const scaleNote = xyScaleOffsets[scaleIdx] + (octs * 12);
+                
+                // Set the second-to-last row as the base root anchor height index
+                const targetRowOffset = ((xyRows - 2) - r) * 12;
+                
+                let midi = xyScaleRootMidi + targetRowOffset + scaleNote;
+                midi = Math.max(0, Math.min(127, midi)); // Clamp purely to MIDI standard boundaries
+
+                if (xyCellData[r] !== undefined && xyCellData[r][c] !== undefined) {
+                    newData[r][c] = xyCellData[r][c]; // Preserve user edits on rebuild
+                } else {
+                    newData[r][c] = midi;
+                }
+
+                const cell = document.createElement('div');
+                cell.className = 'xy-cell';
+                cell.dataset.r = r;
+                cell.dataset.c = c;
+                cell.innerHTML = `<span>${newData[r][c]}</span>`;
+                
+                if (xySelectedCell && parseInt(xySelectedCell.dataset.r) === r && parseInt(xySelectedCell.dataset.c) === c) {
+                    cell.classList.add('selected');
+                    xySelectedCell = cell; // Reset reference to newly generated DOM element
+                }
+
+                container.appendChild(cell);
+            }
+        }
+        xyCellData = newData; // Commit state map
+    }
+
+    // ─── Boot & UI Init ───────────────────────────────────────────────
+    let rootNotes = ["Db","Ab","Eb","Bb","F","C","G","D","A","E","B","F#"];
+    const KEY_ROWS = { major: "qwertyuiop[]", minor: "asdfghjkl;'", seventh: "zxcvbnm,./" };
+    const keyMap = {};
+    const midiMap = { "C":60,"C#":61,"Db":61,"D":62,"D#":63,"Eb":63,"E":64,"F":65,"F#":66,"Gb":66,"G":67,"G#":68,"Ab":68,"A":69,"A#":70,"Bb":70,"B":71 };
+
+    let currentChordNotes = []; let activeBtn = null;
+    const activeSemitones = new Set(); const activeSemitones2 = new Set();
+    let selectedChordRoot = 'C'; let selectedChordType = 'major';
+    let currentRhythmSuffix = '';
+
+    let appStarted = false;
+    async function startApp() {
+        if (appStarted) return;
+        appStarted = true;
+        try {
+            ensureAudioContext();
+            if (audioCtx && typeof audioCtx.resume === 'function') {
+                await audioCtx.resume();
+            }
+            const overlay = document.getElementById('overlay');
+            if (overlay) overlay.style.display = 'none';
+            const boot = (name, fn) => { try { fn(); } catch (e) { console.error(name + ' failed', e); } };
+            boot('initUI', initUI);
+            boot('initPerformanceRecorder', initPerformanceRecorder);
+            boot('initXYPad', initXYPad);
+            boot('initSequencerKeyboard', initSequencerKeyboard);
+            boot('initClockAndAutomation', initClockAndAutomation);
+            boot('initSequenceBlockInterface', initSequenceBlockInterface);
+            boot('initPatchSerializationSystem', initPatchSerializationSystem);
+            boot('initToneSelectorUI', initToneSelectorUI);
+            boot('initMidiRoutingUI', initMidiRoutingUI);
+            boot('parseSeqText', parseSeqText);
+
+            if (nativeBridge) {
+                nativeBridge.appReady();
+            } else {
+                initWebMidiAPI();
+            }
+        } catch (e) {
+            appStarted = false;
+            console.error('startApp failed:', e);
+            const overlay = document.getElementById('overlay');
+            if (overlay) {
+                overlay.innerHTML = '<div><h1>Startup failed</h1><p>Try updating Android System WebView, then reopen the app.</p></div>';
+                overlay.style.display = 'flex';
+            }
+        }
+    }
+
+    function changeRhythmMode(suffix, targetButton) {
+        if (!targetButton) return;
+        const rhythmButtons = document.querySelectorAll('.rhythm-btn');
+        rhythmButtons.forEach(b => b.classList.remove('active'));
+        targetButton.classList.add('active');
+        currentRhythmSuffix = suffix;
+    }
+
+    let chordButtonGrid = { major: [], minor: [], seventh: [], custom: [], custom2: [] };
+
+    function buildChordButtons(notesArray) {
+        const rows = {
+            major: document.getElementById('row-major'), minor: document.getElementById('row-minor'),
+            seventh: document.getElementById('row-7th'), custom: document.getElementById('row-custom'), custom2: document.getElementById('row-custom2')
+        };
+
+        // Clear existing rows
+        for (const key in rows) {
+            if (rows[key]) rows[key].innerHTML = '';
+        }
+        chordButtonGrid = { major: [], minor: [], seventh: [], custom: [], custom2: [] };
+        activeBtn = null; // Clear existing reference
+
+        notesArray.forEach((note, i) => {
+            ['major','minor','seventh','custom','custom2'].forEach(type => {
+                if (!rows[type]) return;
+                const btn = document.createElement('div');
+                btn.className = `btn ${type === 'custom' ? 'seventh' : type === 'custom2' ? 'custom2' : type}`;
+                let suffix = type === 'minor' ? 'm' : type === 'seventh' ? '7' : type === 'custom' ? '*' : type === 'custom2' ? '†' : '';
+                btn.innerHTML = `<span>${note}${suffix}</span>`;
+
+                function activateChord() {
+                    if (activeBtn) activeBtn.classList.remove('active');
+                    btn.classList.add('active'); activeBtn = btn;
+                    selectedChordRoot = note; selectedChordType = type;
+                    updateChord(note, type);
+                }
+                btn.addEventListener('pointerdown', activateChord);
+                chordButtonGrid[type][i] = { activate: activateChord };
+                rows[type].appendChild(btn);
+            });
+        });
+        
+        // Auto-select the first major chord in the new layout
+        if (chordButtonGrid.major[0]) {
+            chordButtonGrid.major[0].activate();
+        }
+        updatePatchString();
+    }
+
+    function initOrdModal() {
+        const modal = document.getElementById('ord-modal');
+        const toggleBtn = document.getElementById('btn-ord-toggle');
+        const closeBtn = document.getElementById('btn-ord-close');
+        const confBtn = document.getElementById('btn-ord-conf');
+        const inputField = document.getElementById('ord-input');
+        const presetSelect = document.getElementById('ord-presets');
+
+        toggleBtn.addEventListener('click', () => {
+            modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+        });
+
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        presetSelect.addEventListener('change', (e) => {
+            inputField.value = e.target.value;
+        });
+
+        confBtn.addEventListener('click', () => {
+            const newOrderStr = inputField.value;
+            const newOrder = newOrderStr.split(',').map(s => s.trim()).filter(s => s);
+            if (newOrder.length > 0) {
+                rootNotes = newOrder;
+                buildChordButtons(rootNotes);
+            }
+            modal.style.display = 'none';
+        });
+    }
+
+    function initUI() {
+        const bind = (id, event, handler) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener(event, handler);
+        };
+        bind('transpose', 'input', e => {
+            let val = e.target.value; 
+            const label = document.getElementById('transpose-val');
+            if (label) label.textContent = val > 0 ? '+' + val : val;
+            updatePatchString();
+            recordEvent("TRANSPOSE", { val: parseInt(val, 10) });
+        });
+        bind('sustain', 'input', e => {
+            updatePatchString();
+            recordEvent("SUSTAIN", { val: parseFloat(e.target.value) });
+        });
+        bind('noteoff-delay', 'input', e => {
+            updatePatchString();
+            recordEvent("NOTEOFF", { val: parseFloat(e.target.value) });
+        });
+        bind('octave-shift', 'input', e => {
+            updatePatchString();
+            recordEvent("OCTAVE", { val: parseInt(e.target.value, 10) });
+        });
+
+        initSemitoneMatrices();
+        buildStrumPlate1();
+        
+        buildChordButtons(rootNotes);
+        initOrdModal();
+        
+        bind('insert-rest-btn', 'click', () => {
+            const restToken = currentRhythmSuffix === '#' ? 'x#' : 'x';
+            insertTokenAtCursor(restToken);
+        });
+
+        bind('delete-seq-btn', 'click', () => {
+            deleteLastToken();
+        });
+
+        const rhythmButtons = document.querySelectorAll('.rhythm-btn');
+        rhythmButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                changeRhythmMode(btn.getAttribute('data-suffix'), btn);
+            });
+        });
+
+        initKeyHandlingEngine();
+    }
+
+    function buildTwoOctaveMatrixDOM(elementId, activeSet, targetType) {
+        const parent = document.getElementById(elementId);
+        if (!parent) return;
+        parent.innerHTML = '';
+        
+        const noteNames = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+        
+        for (let semi = 0; semi < 24; semi++) {
+            const noteName = noteNames[semi % 12];
+            const isBlack = noteName.includes('#');
+            const key = document.createElement('div');
+            
+            if (isBlack) {
+                key.className = 'semi-key black';
+            } else {
+                key.className = 'semi-key white';
+                const label = semi >= 12 ? noteName + "'" : noteName;
+                key.innerHTML = `<span>${label}</span>`;
+            }
+            key.dataset.semi = semi;
+
+            key.addEventListener('pointerdown', () => {
+                if (activeSet.has(semi)) {
+                    activeSet.delete(semi);
+                    key.classList.remove('active');
+                } else {
+                    activeSet.add(semi);
+                    key.classList.add('active');
+                }
+                if (selectedChordType === targetType) {
+                    updateChord(selectedChordRoot, targetType);
+                }
+                updatePatchString();
+            });
+
+            parent.appendChild(key);
+        }
+    }
+
+    function initSemitoneMatrices() {
+        buildTwoOctaveMatrixDOM('semitone-matrix', activeSemitones, 'custom');
+        buildTwoOctaveMatrixDOM('semitone-matrix2', activeSemitones2, 'custom2');
+    }
+	
+	// --- MIDI ROUTING STATE ---
+	let currentMidiChannel = 0; // Internal: 0-15 (Represents Channels 1-16)
+
+	function initMidiRoutingUI() {
+		const chanSel = document.getElementById('midi-channel-select');
+		const progSel = document.getElementById('midi-program-select');
+		if (!chanSel || !progSel) return;
+
+		// 1. Populate Channels (1 - 16)
+		for (let i = 0; i < 16; i++) {
+			let opt = document.createElement('option');
+			opt.value = i;
+			opt.textContent = `Ch ${i + 1}`;
+			chanSel.appendChild(opt);
+		}
+
+		// 2. Populate Standard General MIDI (GM) Instruments
+		const gmNames = [
+			"Acoustic Grand", "Bright Acoustic", "Electric Grand", "Honky-tonk", "Electric Piano 1", "Electric Piano 2", "Harpsichord", "Clavinet", "Celesta", "Glockenspiel", "Music Box", "Vibraphone", "Marimba", "Xylophone", "Tubular Bells", "Dulcimer", "Drawbar Organ", "Percussive Organ", "Rock Organ", "Church Organ", "Reed Organ", "Accordion", "Harmonica", "Tango Accordion", "Nylon Guitar", "Steel Guitar", "Jazz Guitar", "Clean Guitar", "Muted Guitar", "Overdriven Guitar", "Distortion Guitar", "Guitar Harmonics", "Acoustic Bass", "Finger Bass", "Pick Bass", "Fretless Bass", "Slap Bass 1", "Slap Bass 2", "Synth Bass 1", "Synth Bass 2", "Violin", "Viola", "Cello", "Contrabass", "Tremolo Strings", "Pizzicato Strings", "Orchestral Harp", "Timpani", "String Ensemble 1", "String Ensemble 2", "SynthStrings 1", "SynthStrings 2", "Choir Aahs", "Voice Oohs", "Synth Voice", "Orchestra Hit", "Trumpet", "Trombone", "Tuba", "Muted Trumpet", "French Horn", "Brass Section", "SynthBrass 1", "SynthBrass 2", "Soprano Sax", "Alto Sax", "Tenor Sax", "Baritone Sax", "Oboe", "English Horn", "Bassoon", "Clarinet", "Piccolo", "Flute", "Recorder", "Pan Flute", "Blown Bottle", "Shakuhachi", "Whistle", "Ocarina", "Square Lead", "Sawtooth Lead", "Calliope Lead", "Chiff Lead", "Charang Lead", "Voice Lead", "Fifths Lead", "Bass+Lead", "New Age Pad", "Warm Pad", "Polysynth Pad", "Choir Pad", "Bowed Pad", "Metallic Pad", "Halo Pad", "Sweep Pad", "Rain FX", "Soundtrack FX", "Crystal FX", "Atmosphere FX", "Brightness FX", "Goblins FX", "Echoes FX", "Sci-Fi FX", "Sitar", "Banjo", "Shamisen", "Koto", "Kalimba", "Bag pipe", "Fiddle", "Shanai", "Tinkle Bell", "Agogo", "Steel Drums", "Woodblock", "Taiko Drum", "Melodic Tom", "Synth Drum", "Reverse Cymbal", "Guitar Fret Noise", "Breath Noise", "Seashore", "Bird Tweet", "Telephone Ring", "Helicopter", "Applause", "Gunshot"
+		];
+
+		for (let i = 0; i < 128; i++) {
+			let opt = document.createElement('option');
+			opt.value = i;
+			opt.textContent = `${i + 1}: ${gmNames[i]}`;
+			progSel.appendChild(opt);
+		}
+
+		// 3. Event Listeners for Changes
+		chanSel.addEventListener('change', (e) => {
+			currentMidiChannel = parseInt(e.target.value, 10);
+			sendProgramChange(); // Automatically resend PC to the newly selected channel
+		});
+
+		progSel.addEventListener('change', sendProgramChange);
+	}
+
+function sendProgramChange() {
+    const progSel = document.getElementById('midi-program-select');
+    if (!progSel) return;
+    
+    const prog = parseInt(progSel.value, 10);
+    // Program Change Status Byte is 0xC0 (192) combined with the channel
+    const statusByte = 0xC0 | currentMidiChannel; 
+    
+    // Send using your existing unified bridge
+    if (typeof unifiedMidiOutput !== 'undefined' && unifiedMidiOutput.send) {
+        unifiedMidiOutput.send([statusByte, prog]);
+    }
+}
+
+    // ─── Strum Plate 1 (Chords) ───────────────────────────────────────
+    let plate1 = null; let strings1 = []; let lastIndex1 = -1;
+
+    function buildStrumPlate1() {
+        plate1 = document.getElementById('strum-plate-1');
+        if (!plate1) return;
+
+        let activeTouches = {}; // Tracks the current string index for EVERY finger separately
+
+        function processStrum1(yPos, id) {
+            if (!currentChordNotes.length) return;
+            const rect = plate1.getBoundingClientRect();
+            if (rect.height === 0) return;
+
+            const y = Math.max(0, Math.min(yPos - rect.top, rect.height - 0.1));
+            const index = Math.floor((y / rect.height) * currentChordNotes.length);
+            
+            let lastIdx = activeTouches[id];
+            if (index === lastIdx) return;
+
+            if (lastIdx !== undefined && lastIdx !== -1) {
+                const step = index > lastIdx ? 1 : -1;
+                for (let i = lastIdx + step; i !== index + step; i += step) triggerString1(i);
+            } else {
+                triggerString1(index);
+            }
+            activeTouches[id] = index;
+        }
+
+        // --- PURE MOBILE TOUCH ENGINE ---
+        plate1.addEventListener('touchstart', e => {
+            if (e.cancelable) e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                activeTouches[t.identifier] = -1;
+                processStrum1(t.clientY, t.identifier);
+            }
+        }, { passive: false });
+
+        plate1.addEventListener('touchmove', e => {
+            if (e.cancelable) e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                if (activeTouches[t.identifier] !== undefined) processStrum1(t.clientY, t.identifier);
+            }
+        }, { passive: false });
+
+        const endTouch = e => {
+            if (e.cancelable) e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) delete activeTouches[e.changedTouches[i].identifier];
+        };
+        plate1.addEventListener('touchend', endTouch, { passive: false });
+        plate1.addEventListener('touchcancel', endTouch, { passive: false });
+
+        // --- PURE DESKTOP MOUSE BACKUP ---
+        let mouseActive = false;
+        plate1.addEventListener('mousedown', e => {
+            mouseActive = true; activeTouches['mouse'] = -1; processStrum1(e.clientY, 'mouse');
+        });
+        plate1.addEventListener('mousemove', e => {
+            if (mouseActive) processStrum1(e.clientY, 'mouse');
+        });
+        const endMouse = () => { mouseActive = false; delete activeTouches['mouse']; };
+        plate1.addEventListener('mouseup', endMouse);
+        plate1.addEventListener('mouseleave', endMouse);
+    }
+
+    function updateChord(root, type) {
+        const base = midiMap[root]; let intervals = [];
+        if (type === 'major') intervals = [0, 4, 7];
+        else if (type === 'minor') intervals = [0, 3, 7];
+        else if (type === 'seventh') intervals = [0, 4, 7, 10];
+        else if (type === 'custom') intervals = activeSemitones.size ? Array.from(activeSemitones).sort((a,b)=>a-b) : [0];
+        else if (type === 'custom2') intervals = activeSemitones2.size ? Array.from(activeSemitones2).sort((a,b)=>a-b) : [0];
+
+        currentChordNotes = [];
+        
+        if (type === 'custom' || type === 'custom2') {
+            for (let oct = -1; oct < 2; oct++) {
+                intervals.forEach(semi => currentChordNotes.push(base + semi + oct * 12));
+            }
+        } else {
+            for (let oct = -1; oct < 3; oct++) {
+                intervals.forEach(semi => currentChordNotes.push(base + semi + oct * 12));
+            }
+        }
+        
+        currentChordNotes = Array.from(new Set(currentChordNotes))
+            .filter(n => n >= 0 && n <= 127)
+            .sort((a, b) => b - a);
+
+        plate1.innerHTML = ''; strings1 = [];
+        const n = currentChordNotes.length || 12;
+        for (let i = 0; i < n; i++) {
+            const s = document.createElement('div'); s.className = 'string';
+            s.style.top = `${((i + 0.5) / n) * 100}%`;
+            plate1.appendChild(s); strings1.push(s);
+        }
+        lastIndex1 = -1;
+    }
+
+    function triggerString1(index) {
+        let midi = currentChordNotes[index]; if (midi === undefined) return;
+        const shift = parseInt(document.getElementById('octave-shift').value, 10)*12 + parseInt(document.getElementById('transpose').value, 10);
+        midi = Math.max(0, Math.min(127, midi + shift));
+        playNote(midi); midiNoteOn(midi);
+
+        if (strings1[index]) {
+            strings1[index].style.transition = 'none'; strings1[index].style.background = '#4ecdc4';
+            //requestAnimationFrame(() => { strings1[index].style.transition = 'background 0.15s ease-out'; strings1[index].style.background = ''; });
+			setTimeout(() => { 
+                strings1[index].style.transition = 'background 0.2s ease-out'; 
+                strings1[index].style.background = '';
+            }, 20); // 20ms guarantees the frame paints before the fade begins
+        }
+    }
+
+    function handleStrum1(e) {
+        if (!plate1 || !currentChordNotes.length) return;
+        const rect = plate1.getBoundingClientRect();
+        
+        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+            lastIndex1 = -1;
+            return;
+        }
+
+        const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height - 0.1));
+        const index = Math.floor((y / rect.height) * currentChordNotes.length);
+        
+        if (index === lastIndex1) return;
+
+        if (lastIndex1 !== -1 && e.type !== 'pointerdown') {
+            const step = index > lastIndex1 ? 1 : -1;
+            for (let i = lastIndex1 + step; i !== index + step; i += step) triggerString1(i);
+        } else triggerString1(index);
+        lastIndex1 = index;
+    }
+
+    // ─── Sequencer & Strum Plate 2 (Custom Exact Sequence) ────────────
+    let rawSeqTokens = []; 
+    let seqNotesFiltered = []; 
+    let seqStringsData = []; 
+    let lastIndex2 = -1;
+    const seqInput = document.getElementById('seq-midi-text');
+    const seqLengthDisplay = document.getElementById('seq-length-display');
+
+    function initSequencerKeyboard() {
+        const container = document.getElementById('sequencer-keyboard');
+        const notes = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+        
+        for(let midi=36; midi<=96; midi++) { 
+            const noteName = notes[midi % 12];
+            const isBlack = noteName.includes('#');
+            
+            const key = document.createElement('div');
+            if(isBlack) key.className = 'seq-key-b';
+            else {
+                key.className = 'seq-key-w';
+                key.innerHTML = `<span>${noteName.replace('#','')}</span>`;
+            }
+            
+            key.addEventListener('pointerdown', (e) => {
+                e.preventDefault(); 
+                
+                const shift = parseInt(document.getElementById('octave-shift').value, 10)*12 + parseInt(document.getElementById('transpose').value, 10);
+                const auditMidi = Math.max(0, Math.min(127, midi + shift));
+                playNote(auditMidi); 
+                midiNoteOn(auditMidi);
+                
+                insertTokenAtCursor(midi.toString() + currentRhythmSuffix);
+                seqInput.blur(); 
+            });
+            container.appendChild(key);
+        }
+    }
+
+    seqInput.addEventListener('input', parseSeqText);
+
+    function updateSequenceLengthCounter() {
+        let totalSixteenths = 0;
+        rawSeqTokens.forEach(token => {
+            if (token.endsWith('--')) {
+                totalSixteenths += 3;
+            } else if (token.endsWith('-')) {
+                totalSixteenths += 2;
+            } else if (token.endsWith('#')) {
+                totalSixteenths += 4 / 3;
+            } else {
+                totalSixteenths += 1;
+            }
+        });
+        
+        if (totalSixteenths % 1 === 0) {
+            seqLengthDisplay.value = totalSixteenths;
+        } else {
+            seqLengthDisplay.value = Number(totalSixteenths.toFixed(2));
+        }
+    }
+
+    function insertTokenAtCursor(token) {
+        const text = seqInput.value;
+        let start = seqInput.selectionStart;
+        let end = seqInput.selectionEnd;
+
+        if ((document.activeElement !== seqInput && text.length > 0) || (start === 0 && end === 0 && text.length > 0)) {
+            start = text.length;
+            end = text.length;
+        } else {
+            if (start === null) start = text.length;
+            if (end === null) end = text.length;
+        }
+        
+        const before = text.substring(0, start);
+        const after = text.substring(end);
+        
+        let insertion = token;
+        if (before.length > 0 && !before.match(/,\s*$/)) insertion = ", " + insertion;
+        if (after.length > 0 && !after.match(/^\s*,/)) insertion = insertion + ", ";
+
+        seqInput.value = before + insertion + after;
+        
+        parseSeqText();
+        seqInput.scrollLeft = seqInput.scrollWidth;
+        seqInput.blur(); 
+    }
+
+    function deleteLastToken() {
+        let tokens = seqInput.value.split(',').map(t => t.trim());
+        if (tokens.length && tokens[tokens.length - 1] === "") {
+            tokens.pop();
+        }
+        
+        if (!tokens.length || (tokens.length === 1 && tokens[0] === "")) {
+            seqInput.value = "";
+            parseSeqText();
+            seqInput.blur();
+            return;
+        }
+        
+        tokens.pop();
+        seqInput.value = tokens.join(', ') + (tokens.length ? ', ' : '');
+        
+        parseSeqText();
+        seqInput.scrollLeft = seqInput.scrollWidth;
+        seqInput.blur(); 
+    }
+
+    function getTokenDurationInBeats(token) {
+        if (token.endsWith('--')) return 0.75; 
+        if (token.endsWith('-')) return 0.50;  
+        if (token.endsWith('#')) return 1 / 3; 
+        return 0.25;                           
+    }
+
+    function parseSeqText() {
+        const raw = seqInput.value;
+        rawSeqTokens = raw.split(',').map(s => s.trim().toLowerCase()).filter(s => s !== '');
+        
+        seqNotesFiltered = rawSeqTokens
+            .map(token => {
+                const cleanStr = token.replace(/--|-|#/g, '');
+                return parseInt(cleanStr, 10);
+            })
+            .filter(n => !isNaN(n) && n >= 0 && n <= 127);
+            
+        updateSequenceLengthCounter();
+        rebuildStrumPlate2();
+    }
+
+    function rebuildStrumPlate2() {
+        const plate2 = document.getElementById('strum-plate-2');
+        plate2.innerHTML = '';
+        seqStringsData = [];
+        const n = seqNotesFiltered.length;
+        if (n === 0) return;
+
+        const drawnNotes = [...seqNotesFiltered].reverse();
+
+        for (let i = 0; i < n; i++) {
+            const s = document.createElement('div');
+            s.className = 'string';
+            s.style.top = `${((i + 0.5) / n) * 100}%`;
+            plate2.appendChild(s);
+            seqStringsData.push({ element: s, midi: drawnNotes[i] }); 
+        }
+        
+        if(!plate2.dataset.bound) {
+                    let activeTouches2 = {};
+
+                    function processStrum2(yPos, id) {
+                        if (!seqStringsData.length) return;
+                        const rect = plate2.getBoundingClientRect();
+                        if (rect.height === 0) return;
+
+                        const y = Math.max(0, Math.min(yPos - rect.top, rect.height - 0.1));
+                        const index = Math.floor((y / rect.height) * seqStringsData.length);
+                        
+                        let lastIdx = activeTouches2[id];
+                        if (index === lastIdx) return;
+
+                        if (lastIdx !== undefined && lastIdx !== -1) {
+                            const step = index > lastIdx ? 1 : -1;
+                            for (let i = lastIdx + step; i !== index + step; i += step) triggerString2(i);
+                        } else {
+                            triggerString2(index);
+                        }
+                        activeTouches2[id] = index;
+                    }
+
+                    plate2.addEventListener('touchstart', e => {
+                        if (e.cancelable) e.preventDefault();
+                        for (let i = 0; i < e.changedTouches.length; i++) {
+                            const t = e.changedTouches[i];
+                            activeTouches2[t.identifier] = -1; processStrum2(t.clientY, t.identifier);
+                        }
+                    }, { passive: false });
+
+                    plate2.addEventListener('touchmove', e => {
+                        if (e.cancelable) e.preventDefault();
+                        for (let i = 0; i < e.changedTouches.length; i++) {
+                            const t = e.changedTouches[i];
+                            if (activeTouches2[t.identifier] !== undefined) processStrum2(t.clientY, t.identifier);
+                        }
+                    }, { passive: false });
+
+                    const endTouch2 = e => {
+                        if (e.cancelable) e.preventDefault();
+                        for (let i = 0; i < e.changedTouches.length; i++) delete activeTouches2[e.changedTouches[i].identifier];
+                    };
+                    plate2.addEventListener('touchend', endTouch2, { passive: false });
+                    plate2.addEventListener('touchcancel', endTouch2, { passive: false });
+
+                    let mouseActive2 = false;
+                    plate2.addEventListener('mousedown', e => {
+                        mouseActive2 = true; activeTouches2['mouse'] = -1; processStrum2(e.clientY, 'mouse');
+                    });
+                    plate2.addEventListener('mousemove', e => {
+                        if (mouseActive2) processStrum2(e.clientY, 'mouse');
+                    });
+                    const endMouse2 = () => { mouseActive2 = false; delete activeTouches2['mouse']; };
+                    plate2.addEventListener('mouseup', endMouse2);
+                    plate2.addEventListener('mouseleave', endMouse2);
+
+                    plate2.dataset.bound = "true";
+                }
+    }
+
+    function triggerString2(index) {
+        if (!seqStringsData[index]) return;
+        let midi = seqStringsData[index].midi;
+        
+        const shift = parseInt(document.getElementById('octave-shift').value, 10)*12 + parseInt(document.getElementById('transpose').value, 10);
+        midi = Math.max(0, Math.min(127, midi + shift));
+        
+        playNote(midi); midiNoteOn(midi);
+
+        const s = seqStringsData[index].element;
+        s.style.transition = 'none';
+        s.style.background = 'var(--seq-color)'; 
+        requestAnimationFrame(() => {
+            s.style.transition = 'background 0.15s ease-out';
+            s.style.background = ''; 
+        });
+    }
+
+    function handleStrum2(e) {
+        const plate = document.getElementById('strum-plate-2');
+        if (!plate || !seqStringsData.length) return;
+        
+        const rect = plate.getBoundingClientRect();
+        
+        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) {
+            lastIndex2 = -1;
+            return;
+        }
+
+        const y = Math.max(0, Math.min(e.clientY - rect.top, rect.height - 0.1));
+        const index = Math.floor((y / rect.height) * seqStringsData.length);
+        
+        if (index === lastIndex2) return;
+
+        if (lastIndex2 !== -1 && e.type !== 'pointerdown') {
+            const step = index > lastIndex2 ? 1 : -1;
+            for (let i = lastIndex2 + step; i !== index + step; i += step) triggerString2(i);
+        } else triggerString2(index);
+        
+        lastIndex2 = index;
+    }
+
+    // ─── Sequence Blocks System ───────────────────────────────────────
+    let highlightedBlock = null;
+    let songPlaying = false;
+    let songBlockIndex = 0;
+    let songTokenIndex = 0;
+    let songTokensCached = [];
+    let songNotesCached = [];
+
+    function createBlockElement(sequenceText, colorString) {
+        const matrix = document.getElementById('block-matrix-container');
+        const block = document.createElement('div');
+        block.className = 'sequence-block';
+        block.dataset.sequence = sequenceText;
+        block.style.background = colorString;
+
+        block.addEventListener('click', () => {
+            if(highlightedBlock) highlightedBlock.classList.remove('highlighted');
+            block.classList.add('highlighted');
+            highlightedBlock = block;
+        });
+
+        return block;
+    }
+
+    function initSequenceBlockInterface() {
+        const matrix = document.getElementById('block-matrix-container');
+        if (!matrix) return;
+        const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+        
+        bind('btn-seqw', () => {
+            const currentString = seqInput.value;
+            if(!currentString.trim()) return;
+
+            const randomHue = Math.floor(Math.random() * 360);
+            const color = `hsl(${randomHue}, 75%, 55%)`;
+            const block = createBlockElement(currentString, color);
+
+            matrix.appendChild(block);
+            
+            if(!highlightedBlock) {
+                block.classList.add('highlighted');
+                highlightedBlock = block;
+            }
+            updatePatchString();
+        });
+
+        bind('btn-seqr', () => {
+            if(!highlightedBlock) return;
+            seqInput.value = highlightedBlock.dataset.sequence;
+            parseSeqText();
+            seqInput.scrollLeft = seqInput.scrollWidth;
+        });
+
+        bind('btn-sequ', () => {
+            if(!highlightedBlock) return;
+            highlightedBlock.dataset.sequence = seqInput.value;
+            updatePatchString();
+        });
+
+        bind('btn-seqc', () => {
+            if(!highlightedBlock) return;
+            const seqStr = highlightedBlock.dataset.sequence;
+            const colorStr = highlightedBlock.style.background;
+            
+            const clonedBlock = createBlockElement(seqStr, colorStr);
+            matrix.appendChild(clonedBlock);
+            updatePatchString();
+        });
+
+        bind('btn-seqd', () => {
+            if(!highlightedBlock) return;
+            const fallbackBlock = highlightedBlock.nextElementSibling || highlightedBlock.previousElementSibling;
+            
+            highlightedBlock.remove();
+            highlightedBlock = null;
+
+            if(fallbackBlock) {
+                fallbackBlock.classList.add('highlighted');
+                highlightedBlock = fallbackBlock;
+            }
+            updatePatchString();
+        });
+
+        bind('btn-movl', () => {
+            if(!highlightedBlock) return;
+            const prev = highlightedBlock.previousElementSibling;
+            if(prev) {
+                matrix.insertBefore(highlightedBlock, prev);
+                updatePatchString();
+            }
+        });
+
+        bind('btn-movr', () => {
+            if(!highlightedBlock) return;
+            const next = highlightedBlock.nextElementSibling;
+            if(next) {
+                matrix.insertBefore(next, highlightedBlock);
+                updatePatchString();
+            }
+        });
+    }
+
+    // ─── Clock, Timing & Playback Engine ──────────────────────────────
+    let bpm = 120;
+    let isPlaying = false;
+    let nextNoteTime = 0.0;
+    let currentSeqIndex = 0;
+    let tapTimes = [];
+    let scheduleIntervalId = null;
+
+    function initClockAndAutomation() {
+        const bpmSlider = document.getElementById('bpm-slider');
+        const bpmVal = document.getElementById('bpm-val');
+        const tapBtn = document.getElementById('tap-bpm');
+        const playBtn = document.getElementById('play-seq');
+        const songBtn = document.getElementById('play-song');
+
+        bpmSlider.addEventListener('input', (e) => {
+            bpm = parseInt(e.target.value, 10);
+            bpmVal.textContent = bpm;
+            updatePatchString();
+        });
+
+        tapBtn.addEventListener('click', () => {
+            const now = performance.now();
+            tapTimes.push(now);
+            if (tapTimes.length > 4) tapTimes.shift();
+            
+            if (tapTimes.length >= 2) {
+                let accum = 0;
+                for (let i = 1; i < tapTimes.length; i++) {
+                    accum += (tapTimes[i] - tapTimes[i - 1]);
+                }
+                const avgDiff = accum / (tapTimes.length - 1);
+                bpm = Math.round(60000 / avgDiff);
+                if (bpm < 60) bpm = 60;
+                if (bpm > 240) bpm = 240;
+
+                bpmSlider.value = bpm;
+                bpmVal.textContent = bpm;
+                updatePatchString();
+            }
+        });
+
+        playBtn.addEventListener('click', () => {
+            if(songPlaying) stopSongPlayback();
+            
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                playBtn.style.background = 'var(--active-glow)';
+                playBtn.style.color = '#fff';
+                currentSeqIndex = 0;
+                nextNoteTime = audioCtx.currentTime + 0.05;
+                scheduleIntervalId = setInterval(scheduler, 15);
+            } else {
+                playBtn.style.background = '#333';
+                playBtn.style.color = 'var(--seq-color)';
+                if (scheduleIntervalId) {
+                    clearInterval(scheduleIntervalId);
+                    scheduleIntervalId = null;
+                }
+            }
+        });
+
+        songBtn.addEventListener('click', () => {
+            if(isPlaying) {
+                isPlaying = false;
+                playBtn.style.background = '#333';
+                playBtn.style.color = 'var(--seq-color)';
+                if (scheduleIntervalId) clearInterval(scheduleIntervalId);
+            }
+
+            songPlaying = !songPlaying;
+            if(songPlaying) {
+                const blocks = document.querySelectorAll('.sequence-block');
+                if(blocks.length === 0) {
+                    songPlaying = false;
+                    return;
+                }
+                songBtn.style.background = 'var(--active-glow)';
+                songBtn.style.color = '#fff';
+                
+                songBlockIndex = 0;
+                songTokenIndex = 0;
+                prepareSongBlockData(blocks[songBlockIndex]);
+                
+                nextNoteTime = audioCtx.currentTime + 0.05;
+                scheduleIntervalId = setInterval(songScheduler, 15);
+            } else {
+                stopSongPlayback();
+            }
+        });
+    }
+
+    function stopSongPlayback() {
+        songPlaying = false;
+        document.getElementById('play-song').style.background = '#333';
+        document.getElementById('play-song').style.color = '#ff6b6b';
+        if(scheduleIntervalId) {
+            clearInterval(scheduleIntervalId);
+            scheduleIntervalId = null;
+        }
+        document.querySelectorAll('.sequence-block').forEach(b => b.classList.remove('playing-now'));
+    }
+
+    function prepareSongBlockData(blockEl) {
+        document.querySelectorAll('.sequence-block').forEach(b => b.classList.remove('playing-now'));
+        if(!blockEl) return;
+        
+        blockEl.classList.add('playing-now');
+        const raw = blockEl.dataset.sequence || "";
+        songTokensCached = raw.split(',').map(s => s.trim().toLowerCase()).filter(s => s !== '');
+        
+        songNotesCached = songTokensCached
+            .map(token => {
+                const cleanStr = token.replace(/--|-|#/g, '');
+                return parseInt(cleanStr, 10);
+            })
+            .filter(n => !isNaN(n) && n >= 0 && n <= 127);
+    }
+
+    function scheduler() {
+        if (!rawSeqTokens.length) return;
+
+        while (nextNoteTime < audioCtx.currentTime + 0.1) {
+            scheduleNote(currentSeqIndex, nextNoteTime);
+            advanceNote();
+            if (!rawSeqTokens.length) break;
+        }
+    }
+
+    function songScheduler() {
+        const blocks = document.querySelectorAll('.sequence-block');
+        if(!blocks.length || songBlockIndex >= blocks.length) {
+            stopSongPlayback();
+            return;
+        }
+
+        while (nextNoteTime < audioCtx.currentTime + 0.1) {
+            if (songTokensCached.length > 0) {
+                scheduleSongNote(songTokenIndex, nextNoteTime);
+            }
+            advanceSongNote(blocks);
+            
+            if (!songPlaying || songBlockIndex >= blocks.length) break;
+        }
+    }
+
+    // ─── Patch Box Serialization State Engine ────────────────────────
+    const patchOutputField = document.getElementById('patch-output-text');
+    const patchInputField  = document.getElementById('patch-input-text');
+
+    function initPatchSerializationSystem() {
+        const copyBtn = document.getElementById('btn-patch-copy');
+        const loadBtn = document.getElementById('btn-patch-load');
+
+        copyBtn.addEventListener('click', () => {
+            updatePatchString();
+            if(!patchOutputField.value) return;
+            
+            patchOutputField.select();
+            navigator.clipboard.writeText(patchOutputField.value).then(() => {
+                const oldText = copyBtn.textContent;
+                copyBtn.textContent = "COPIED!";
+                copyBtn.style.color = "var(--active-glow)";
+                setTimeout(() => {
+                    copyBtn.textContent = oldText;
+                    copyBtn.style.color = "";
+                }, 1000);
+            }).catch(err => {
+                console.error("Clipboard copy rejection: ", err);
+            });
+        });
+
+        loadBtn.addEventListener('click', () => {
+            const dataStr = patchInputField.value.trim();
+            if(!dataStr) return;
+
+            try {
+                const state = JSON.parse(dataStr);
+                
+                if(state.bpm) { bpm = state.bpm; document.getElementById('bpm-slider').value = bpm; document.getElementById('bpm-val').textContent = bpm; }
+                if(state.sustain) document.getElementById('sustain').value = state.sustain;
+                if(state.noteOffDelay) document.getElementById('noteoff-delay').value = state.noteOffDelay;
+                if(state.octaveShift) document.getElementById('octave-shift').value = state.octaveShift;
+                if(state.transpose !== undefined) {
+                    document.getElementById('transpose').value = state.transpose;
+                    document.getElementById('transpose-val').textContent = state.transpose > 0 ? '+' + state.transpose : state.transpose;
+                }
+
+                activeSemitones.clear();
+                if(state.matrix1) state.matrix1.forEach(s => activeSemitones.add(s));
+                buildTwoOctaveMatrixDOM('semitone-matrix', activeSemitones, 'custom');
+
+                activeSemitones2.clear();
+                if(state.matrix2) state.matrix2.forEach(s => activeSemitones2.add(s));
+                buildTwoOctaveMatrixDOM('semitone-matrix2', activeSemitones2, 'custom2');
+
+                if(activeBtn) {
+                    updateChord(selectedChordRoot, selectedChordType);
+                }
+
+                const matrix = document.getElementById('block-matrix-container');
+                matrix.innerHTML = '';
+                highlightedBlock = null;
+
+                if(state.blocks && Array.isArray(state.blocks)) {
+                    state.blocks.forEach((bData, idx) => {
+                        const block = createBlockElement(bData.seq, bData.color);
+                        matrix.appendChild(block);
+                        if(idx === 0) {
+                            block.classList.add('highlighted');
+                            highlightedBlock = block;
+                        }
+                    });
+                }
+                
+                loadBtn.style.color = "#fff";
+                setTimeout(() => { loadBtn.style.color = "#4ecdc4"; }, 600);
+                updatePatchString();
+
+            } catch (e) {
+                alert("Invalid patch structure string parsed. Verification failed.");
+                console.error(e);
+            }
+        });
+
+        setTimeout(updatePatchString, 500);
+    }
+
+    function updatePatchString() {
+        const blockElements = document.querySelectorAll('.sequence-block');
+        const blocksData = [];
+        blockElements.forEach(b => {
+            blocksData.push({
+                seq: b.dataset.sequence,
+                color: b.style.background
+            });
+        });
+
+        const projectState = {
+            bpm: bpm,
+            sustain: parseFloat(document.getElementById('sustain').value),
+            noteOffDelay: parseFloat(document.getElementById('noteoff-delay').value),
+            octaveShift: parseInt(document.getElementById('octave-shift').value, 10),
+            transpose: parseInt(document.getElementById('transpose').value, 10),
+            matrix1: Array.from(activeSemitones),
+            matrix2: Array.from(activeSemitones2),
+            blocks: blocksData
+        };
+
+        patchOutputField.value = JSON.stringify(projectState);
+    }
+
+    function scheduleNote(index, time) {
+        if (!rawSeqTokens.length || !rawSeqTokens[index]) return;
+        
+        const token = rawSeqTokens[index];
+        if (token.startsWith('x')) return;
+
+        const cleanStr = token.replace(/--|-|#/g, '');
+        const parsedMidi = parseInt(cleanStr, 10);
+        if (isNaN(parsedMidi)) return;
+
+        const matchNoteIndex = seqNotesFiltered.indexOf(parsedMidi);
+        if (matchNoteIndex === -1) return;
+
+        const delayMs = Math.max(0, (time - audioCtx.currentTime) * 1000);
+        setTimeout(() => {
+            if (!isPlaying) return;
+            const visualIndex = seqStringsData.length - 1 - matchNoteIndex;
+            if (visualIndex >= 0 && visualIndex < seqStringsData.length) {
+                triggerString2(visualIndex);
+            }
+        }, delayMs);
+    }
+
+    function scheduleSongNote(index, time) {
+        if (!songTokensCached.length || !songTokensCached[index]) return;
+        
+        const token = songTokensCached[index];
+        if (token.startsWith('x')) return;
+
+        const cleanStr = token.replace(/--|-|#/g, '');
+        const parsedMidi = parseInt(cleanStr, 10);
+        if (isNaN(parsedMidi)) return;
+
+        const delayMs = Math.max(0, (time - audioCtx.currentTime) * 1000);
+        setTimeout(() => {
+            if (!songPlaying) return;
+            const shift = parseInt(document.getElementById('octave-shift').value, 10)*12 + parseInt(document.getElementById('transpose').value, 10);
+            const finalMidi = Math.max(0, Math.min(127, parsedMidi + shift));
+            playNote(finalMidi); 
+            midiNoteOn(finalMidi);
+        }, delayMs);
+    }
+
+    function advanceNote() {
+        if (!rawSeqTokens.length) {
+            currentSeqIndex = 0;
+            return;
+        }
+
+        const activeToken = rawSeqTokens[currentSeqIndex];
+        const durationInBeats = getTokenDurationInBeats(activeToken);
+        
+        const secondsPerBeat = 60.0 / bpm;
+        nextNoteTime += secondsPerBeat * durationInBeats; 
+        
+        currentSeqIndex = (currentSeqIndex + 1) % rawSeqTokens.length;
+    }
+
+    function advanceSongNote(blocks) {
+        if (songTokensCached.length === 0) {
+            songBlockIndex++;
+            songTokenIndex = 0;
+            if (songBlockIndex < blocks.length) {
+                prepareSongBlockData(blocks[songBlockIndex]);
+            }
+            return;
+        }
+
+        const activeToken = songTokensCached[songTokenIndex];
+        const durationInBeats = getTokenDurationInBeats(activeToken);
+        
+        const secondsPerBeat = 60.0 / bpm;
+        nextNoteTime += secondsPerBeat * durationInBeats;
+        
+        songTokenIndex++;
+        if (songTokenIndex >= songTokensCached.length) {
+            songBlockIndex++;
+            songTokenIndex = 0;
+            if (songBlockIndex < blocks.length) {
+                prepareSongBlockData(blocks[songBlockIndex]);
+            }
+        }
+    }
+
+    // ─── Bitmask-Based Matrix Engine for Multi-Key Combos ─────────────
+    const heldKeysMap = new Set();
+    let comboEvaluationTimeoutId = null;
+
+    function initKeyHandlingEngine() {
+        document.addEventListener('keydown', e => {
+            if (e.repeat) return;
+            if (document.activeElement === seqInput || document.activeElement === patchInputField || document.activeElement === patchOutputField) return;
+
+            if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+                handleSequencerHotkeys(e.key);
+                return;
+            }
+
+            heldKeysMap.add(e.key.toLowerCase());
+
+            if (comboEvaluationTimeoutId) clearTimeout(comboEvaluationTimeoutId);
+            comboEvaluationTimeoutId = setTimeout(evaluateKeyboardMatrixChords, 15);
+        });
+
+        document.addEventListener('keyup', e => {
+            heldKeysMap.delete(e.key.toLowerCase());
+        });
+    }
+
+    function handleSequencerHotkeys(key) {
+        if (key === '1') {
+            const restToken = currentRhythmSuffix === '#' ? 'x#' : 'x';
+            insertTokenAtCursor(restToken);
+        } else if (key === '2') {
+            deleteLastToken();
+        } else if (key === '3') {
+            changeRhythmMode('-', document.getElementById('rhythm-btn-8th'));
+        } else if (key === '4') {
+            changeRhythmMode('', document.getElementById('rhythm-btn-16th'));
+        } else if (key === '5') {
+            changeRhythmMode('--', document.getElementById('rhythm-btn-dot8th'));
+        } else if (key === '6') {
+            changeRhythmMode('#', document.getElementById('rhythm-btn-trip8th'));
+        }
+    }
+
+    function evaluateKeyboardMatrixChords() {
+        if (heldKeysMap.size === 0) return;
+
+        const row1 = KEY_ROWS.major;
+        const row2 = KEY_ROWS.minor;
+        const row3 = KEY_ROWS.seventh;
+
+        for (let i = 0; i < row1.length; i++) {
+            const k1 = row1[i];
+            const k2 = row2[i];
+            const k3 = row3[i];
+
+            if (k1 && k2 && heldKeysMap.has(k1) && heldKeysMap.has(k2)) {
+                if (chordButtonGrid.custom[i]) {
+                    chordButtonGrid.custom[i].activate();
+                    return;
+                }
+            }
+
+            if (k2 && k3 && heldKeysMap.has(k2) && heldKeysMap.has(k3)) {
+                if (chordButtonGrid.custom2[i]) {
+                    chordButtonGrid.custom2[i].activate();
+                    return;
+                }
+            }
+        }
+
+        for (let i = 0; i < row1.length; i++) {
+            if (heldKeysMap.has(row1[i]) && chordButtonGrid.major[i]) { chordButtonGrid.major[i].activate(); return; }
+            if (heldKeysMap.has(row2[i]) && chordButtonGrid.minor[i]) { chordButtonGrid.minor[i].activate(); return; }
+            if (heldKeysMap.has(row3[i]) && chordButtonGrid.seventh[i]) { chordButtonGrid.seventh[i].activate(); return; }
+        }
+    }
+</script>
+<style>
+    #metronome-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background-color: #333333;
+        display: inline-block;
+        margin-right: 4px;
+        margin-left: 4px;
+        vertical-align: middle;
+        cursor: pointer;
+        transition: background-color 0.05s ease, box-shadow 0.05s ease;
+        border: 1px solid #444;
+    }
+    #metronome-dot.enabled {
+        background-color: #1c5e59; /* Dimmed state when waiting */
+    }
+    #metronome-dot.beat-strong {
+        background-color: #4ecdc4 !important; /* Glowing Teal/Cyan */
+        box-shadow: 0 0 12px #4ecdc4, 0 0 4px #4ecdc4;
+    }
+    #metronome-dot.beat-weak {
+        background-color: #24756f !important; /* Dimmed Teal/Cyan */
+        box-shadow: 0 0 4px #24756f;
+    }
+</style>
+
+<script>
+(function() {
+    let metronomeEnabled = true;
+    let metronomeIntervalId = null;
+    let currentBeat = 0; // 0 = Beat 1, 1 = Beat 2, etc.
+
+    window.addEventListener('DOMContentLoaded', () => {
+        // 1. Create and position the metronome dot to the left of the BPM slider
+        const dot = document.createElement('div');
+        dot.id = 'metronome-dot';
+        dot.className = 'enabled';
+        dot.title = 'Toggle Metronome ON/OFF';
+
+        // Automatically target your BPM slider/input container
+        const bpmSlider = document.querySelector('input[type="range"][id*="bpm"]') || 
+                          document.querySelector('input[type="range"][id*="tempo"]') ||
+                          document.querySelector('#tempo-slider') ||
+                          document.querySelector('[id*="bpm"]');
+
+        if (bpmSlider) {
+            // Insert directly to the left of the slider or its parent container label
+            if (bpmSlider.parentElement) {
+                bpmSlider.parentElement.insertBefore(dot, bpmSlider);
+            } else {
+                bpmSlider.before(dot);
+            }
+        } else {
+            // Fallback placement inside control status if ID isn't generic
+            const statusPanel = document.getElementById('midi-status');
+            if (statusPanel) statusPanel.prepend(dot);
+        }
+
+        // 2. Click handler to toggle the metronome on/off manually
+        dot.addEventListener('click', (e) => {
+            e.stopPropagation();
+            metronomeEnabled = !metronomeEnabled;
+            if (metronomeEnabled) {
+                dot.className = 'enabled';
+            } else {
+                dot.className = '';
+                stopMetronome();
+            }
+        });
+
+        // 3. Find your REC button to trigger the start automatically
+        const recBtn = document.getElementById('rec-btn') || 
+                       document.getElementById('record-btn') || 
+                       Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('REC'));
+
+        if (recBtn) {
+            recBtn.addEventListener('click', () => {
+                if (metronomeEnabled) {
+                    startMetronome(bpmSlider);
+                }
+            });
+        }
+        
+        // Alternate listener hook in case REC toggle relies on recording state changes
+        const stopBtn = document.getElementById('stop-btn') || 
+                        Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('STOP'));
+        if (stopBtn) {
+            stopBtn.addEventListener('click', stopMetronome);
+        }
+    });
+
+    function startMetronome(bpmSlider) {
+        stopMetronome(); // Clear any running loop safely
+        currentBeat = 0;
+        
+        function pulse() {
+            if (!metronomeEnabled) return;
+
+            const dot = document.getElementById('metronome-dot');
+            if (!dot) return;
+
+            // Flash visual accent based on the beat cycle
+            if (currentBeat === 0) {
+                dot.classList.add('beat-strong');
+            } else {
+                dot.classList.add('beat-weak');
+            }
+
+            // Remove visual flash quickly to create a crisp pulse effect
+            setTimeout(() => {
+                dot.classList.remove('beat-strong', 'beat-weak');
+            }, 120);
+
+            // Cycle through beats 1, 2, 3, 4
+            currentBeat = (currentBeat + 1) % 4;
+
+            // Dynamically query current UI BPM to maintain real-time sync if slider moves
+            const currentBPM = bpmSlider ? parseFloat(bpmSlider.value) : 120;
+            const msPerBeat = 60000 / (currentBPM || 120);
+
+            // Schedule next beat precisely
+            metronomeIntervalId = setTimeout(pulse, msPerBeat);
+        }
+
+        pulse();
+    }
+
+    function stopMetronome() {
+        if (metronomeIntervalId) {
+            clearTimeout(metronomeIntervalId);
+            metronomeIntervalId = null;
+        }
+        const dot = document.getElementById('metronome-dot');
+        if (dot) {
+            dot.classList.remove('beat-strong', 'beat-weak');
+        }
+    }
+})();
+</script>
+<style>
+    #render-audio-btn {
+        margin-left: 5px;
+        background-color: #8338ec;
+        color: white;
+        font-weight: bold;
+        border: 1px solid #444;
+        padding: 6px 10px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    }
+    #render-audio-btn.recording {
+        background-color: #d90429;
+        animation: pulse-red 1.5s infinite;
+    }
+    #render-download-link {
+        display: block;
+        margin-top: 5px;
+        color: #4ecdc4;
+        font-size: 11px;
+        text-decoration: underline;
+        cursor: pointer;
+        font-weight: bold;
+        text-align: center;
+    }
+    @keyframes pulse-red { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+</style>
+
+<script>
+(function() {
+    let leftChannelBuffer = [];
+    let rightChannelBuffer = [];
+    let recordingProcessor = null;
+    let isRendering = false;
+    let targetAudioContext = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const playBtn = document.getElementById('play-btn') || 
+                        document.getElementById('play-song-btn') || 
+                        Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'PLAY' || b.innerText.includes('Play'));
+
+        if (!playBtn) return;
+
+        const renderBtn = document.createElement('button');
+        renderBtn.id = 'render-audio-btn';
+        renderBtn.innerText = 'RENDER';
+        renderBtn.title = 'Click to start tape. Captures playback and live play indefinitely. Click again to save WAV.';
+        playBtn.after(renderBtn);
+
+        const manualLink = document.createElement('a');
+        manualLink.id = 'render-download-link';
+        manualLink.style.display = 'none';
+        renderBtn.after(manualLink);
+
+        renderBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (isRendering) stopRendering();
+            else startRendering(playBtn, renderBtn, manualLink);
+        });
+    });
+
+    function startRendering(playBtn, renderBtn, manualLink) {
+        manualLink.style.display = 'none';
+
+        if (!window.__OMNI_FLARE) {
+            try { new (window.AudioContext || window.webkitAudioContext)(); } catch(e){}
+        }
+
+        let rawCtx = window.__OMNI_FLARE || window.audioCtx || window.audioContext;
+        
+        if (!rawCtx && window.Tone && window.Tone.context) {
+            rawCtx = window.Tone.context._context || window.Tone.context.rawContext || window.Tone.context;
+        }
+
+        if (!rawCtx || !rawCtx.__masterTollbooth) {
+            alert("Audio context error: Could not lock onto the internal synthesizer engine.");
+            return;
+        }
+
+        targetAudioContext = rawCtx;
+        if (targetAudioContext.state === 'suspended') targetAudioContext.resume();
+
+        isRendering = true;
+        leftChannelBuffer = [];
+        rightChannelBuffer = [];
+
+        renderBtn.classList.add('recording');
+        renderBtn.innerText = 'REC...';
+
+        // 1. ABSOLUTE MAXIMUM BUFFER SIZE: 16384 prevents JS main-thread drops during UI intensive tasks
+        const bufferSize = 16384; 
+        recordingProcessor = targetAudioContext.createScriptProcessor(bufferSize, 2, 2);
+        
+        recordingProcessor.onaudioprocess = (e) => {
+            const outputBuffer = e.outputBuffer;
+            for (let channel = 0; channel < outputBuffer.numberOfChannels; channel++) {
+                const outData = outputBuffer.getChannelData(channel);
+                for (let i = 0; i < outData.length; i++) {
+                    outData[i] = 0.0;
+                }
+            }
+
+            if (!isRendering) return;
+            
+            const inputBuffer = e.inputBuffer;
+            leftChannelBuffer.push(new Float32Array(inputBuffer.getChannelData(0)));
+            rightChannelBuffer.push(new Float32Array(inputBuffer.getChannelData(1)));
+        };
+
+        targetAudioContext.__masterTollbooth.connect(recordingProcessor);
+        recordingProcessor.connect(targetAudioContext.__realDestination);
+
+        // 2. EXTENDED SYSTEM PRE-ROLL: 400ms allows the DOM, memory allocators, and CSS paints to finish before audio fires
+        setTimeout(() => {
+            if (isRendering) {
+                playBtn.click();
+            }
+        }, 400);
+    }
+
+    function stopRendering() {
+        if (!isRendering) return;
+        isRendering = false;
+
+        const renderBtn = document.getElementById('render-audio-btn');
+        if (renderBtn) {
+            renderBtn.classList.remove('recording');
+            renderBtn.innerText = 'RENDER';
+        }
+
+        if (recordingProcessor && targetAudioContext) {
+            targetAudioContext.__masterTollbooth.disconnect(recordingProcessor);
+            recordingProcessor.disconnect();
+            recordingProcessor.onaudioprocess = null;
+            recordingProcessor = null;
+        }
+
+        exportHighFidelityWav();
+    }
+
+    function exportHighFidelityWav() {
+        const sampleRate = targetAudioContext ? targetAudioContext.sampleRate : 44100;
+        
+        const flattenChannel = (channelBuffer) => {
+            let totalLength = channelBuffer.reduce((acc, buf) => acc + buf.length, 0);
+            let result = new Float32Array(totalLength);
+            let offset = 0;
+            for (let i = 0; i < channelBuffer.length; i++) {
+                result.set(channelBuffer[i], offset);
+                offset += channelBuffer[i].length;
+            }
+            return result;
+        };
+
+        const leftFlat = flattenChannel(leftChannelBuffer);
+        const rightFlat = flattenChannel(rightChannelBuffer);
+        const sampleCount = leftFlat.length;
+
+        if (sampleCount === 0) {
+            alert("Zero audio frames captured.");
+            return;
+        }
+
+        let peakVolume = 0.0;
+        
+        for (let i = 0; i < sampleCount; i++) {
+            const absL = Math.abs(leftFlat[i]);
+            const absR = Math.abs(rightFlat[i]);
+            if (absL > peakVolume) peakVolume = absL;
+            if (absR > peakVolume) peakVolume = absR;
+        }
+
+        const gainMultiplier = peakVolume > 1.0 ? (0.95 / peakVolume) : 1.0;
+
+        const fadeSamples = Math.min(sampleCount, Math.floor(sampleRate * 0.05));
+
+        for (let i = 0; i < sampleCount; i++) {
+            leftFlat[i] *= gainMultiplier;
+            rightFlat[i] *= gainMultiplier;
+
+            if (i < fadeSamples) {
+                const fadeEnvelope = i / fadeSamples;
+                leftFlat[i] *= fadeEnvelope;
+                rightFlat[i] *= fadeEnvelope;
+            } else if (i > sampleCount - fadeSamples) {
+                const fadeEnvelope = (sampleCount - i) / fadeSamples;
+                leftFlat[i] *= fadeEnvelope;
+                rightFlat[i] *= fadeEnvelope;
+            }
+        }
+
+        const buffer = new ArrayBuffer(44 + sampleCount * 4);
+        const view = new DataView(buffer);
+        const writeString = (offset, string) => { for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i)); };
+
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36 + sampleCount * 4, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 2, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 4, true);
+        view.setUint16(32, 4, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, sampleCount * 4, true);
+
+        let offset = 44;
+        for (let i = 0; i < sampleCount; i++) {
+            let sL = Math.max(-1, Math.min(1, leftFlat[i]));
+            view.setInt16(offset, sL < 0 ? sL * 0x8000 : sL * 0x7FFF, true);
+            let sR = Math.max(-1, Math.min(1, rightFlat[i]));
+            view.setInt16(offset + 2, sR < 0 ? sR * 0x8000 : sR * 0x7FFF, true);
+            offset += 4;
+        }
+
+        const blob = new Blob([buffer], { type: 'audio/wav' });
+        const url = URL.createObjectURL(blob);
+        const filename = `Omnichord_Render_${new Date().toLocaleTimeString().replace(/:/g, '-')}.wav`;
+
+        const manualLink = document.getElementById('render-download-link');
+        if (manualLink) {
+            manualLink.href = url;
+            manualLink.download = filename;
+            manualLink.innerText = "⬇ Download Master (.wav)";
+            manualLink.style.display = 'block';
+        }
+
+        const autoLink = document.createElement('a');
+        autoLink.href = url;
+        autoLink.download = filename;
+        document.body.appendChild(autoLink);
+        autoLink.click();
+        document.body.removeChild(autoLink);
+    }
+})();
+</script>
+</body>
+</html>
