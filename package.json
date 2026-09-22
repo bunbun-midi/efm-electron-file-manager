@@ -1,0 +1,22 @@
+{
+  "name": "electron-file-manager",
+  "productName": "File Manager",
+  "version": "1.0.0",
+  "description": "A cross-platform (Mac-first) Electron file manager with a Windows-98-style internal window manager, icon/detail views, scriptable virtual directories, and a real in-app terminal.",
+  "main": "main.js",
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/layout.test.cjs tests/icon-drop.test.cjs tests/search.test.cjs tests/file-icons.test.cjs tests/folder-sizes.test.cjs tests/transfers-metadata.test.cjs tests/desktop-settings.test.cjs tests/media-files.test.cjs tests/activity-history.test.cjs && node --test tests/native-clipboard.test.cjs && electron tests/icon-appearance.cjs && electron tests/main-features.cjs && electron tests/media-features.cjs && electron tests/location-live-search.cjs && electron tests/activity-background.cjs && electron tests/background-downloads.cjs",
+    "postinstall": "electron-rebuild -f -w node-pty"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "@electron/rebuild": "^4.0.0"
+  }
+}
